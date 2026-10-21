@@ -163,7 +163,7 @@ jobs:
           if [ -z "$apk" ]; then echo "::error::Gradle finished but produced no debug APK"; exit 1; fi
           bt="$ANDROID_HOME/build-tools/34.0.0"
           mkdir -p out
-          name=$(basename "$apk" | tr -c 'A-Za-z0-9._-\n' '_')
+          name=$(basename "$apk" | sed 's/[^A-Za-z0-9._-]/_/g')
           cp "$apk" "out/$name"
           {
             echo "file: $name"

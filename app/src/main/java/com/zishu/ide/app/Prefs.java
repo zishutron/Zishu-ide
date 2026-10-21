@@ -112,4 +112,15 @@ public final class Prefs {
     public void setCloudAllowPublic(boolean v) {
         sp.edit().putBoolean("cloudAllowPublic", v).apply();
     }
+
+    // ---- project storage
+
+    /** True (the default) when projects are kept in the visible ZishuIDE folder on the phone instead of app-private storage. */
+    public boolean sharedStorage() {
+        return sp.getBoolean("sharedStorage", true);
+    }
+
+    public void setSharedStorage(boolean v) {
+        sp.edit().putBoolean("sharedStorage", v).apply();
+    }
 }

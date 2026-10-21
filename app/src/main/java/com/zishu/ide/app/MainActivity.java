@@ -68,7 +68,7 @@ public final class MainActivity extends BaseActivity {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         android.widget.ImageView logo = new android.widget.ImageView(this);
-        logo.setImageResource(R.drawable.ic_launcher);
+        logo.setImageResource(R.drawable.zishu_launcher);
         logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         header.addView(logo, Ui.lp(dp(44), dp(44)));
         LinearLayout titles = new LinearLayout(this);

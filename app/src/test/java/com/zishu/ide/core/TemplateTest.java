@@ -19,7 +19,6 @@ import com.zishu.ide.core.validation.ValidationException;
 import org.junit.Test;
 
 import java.io.StringWriter;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -29,14 +28,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.tools.Diagnostic.Kind;
-import javax.tools.DiagnosticCollector;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.SimpleJavaFileObject;
-import javax.tools.ToolProvider;
 
-import com.sun.source.util.JavacTask;
 
 public class TemplateTest {
 
@@ -50,27 +42,63 @@ public class TemplateTest {
         return ProjectConfig.forType(t);
     }
 
-    /** Parses (syntax only, no symbol resolution) Java source with the JDK's own compiler front end. */
+    /**
+     * Parses (syntax only, no symbol resolution) Java source with the JDK's own compiler front end.
+     * The javax.tools API is reached by reflection because Android Gradle Plugin compiles unit tests
+     * against android.jar, which does not contain it; at run time the tests execute on a JDK.
+     */
     private static List<String> javaSyntaxErrors(String name, String source) throws Exception {
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        Class<?> toolProvider = Class.forName("javax.tools.ToolProvider");
+        Object compiler = toolProvider.getMethod("getSystemJavaCompiler").invoke(null);
         assertNotNull("tests must run on a JDK", compiler);
-        DiagnosticCollector<JavaFileObject> diags = new DiagnosticCollector<JavaFileObject>();
-        JavaFileObject file = new SimpleJavaFileObject(URI.create("string:///" + name), JavaFileObject.Kind.SOURCE) {
-            @Override
-            public CharSequence getCharContent(boolean ignore) {
-                return source;
-            }
-        };
-        JavacTask task = (JavacTask) compiler.getTask(new StringWriter(), null, diags,
-                Arrays.asList("-proc:none"), null, Arrays.asList(file));
-        task.parse();
-        List<String> errors = new ArrayList<String>();
-        for (javax.tools.Diagnostic<? extends JavaFileObject> d : diags.getDiagnostics()) {
-            if (d.getKind() == Kind.ERROR) {
-                errors.add(d.getLineNumber() + ": " + d.getMessage(null));
-            }
+        Class<?> compilerType = Class.forName("javax.tools.JavaCompiler");
+        Class<?> fmType = Class.forName("javax.tools.StandardJavaFileManager");
+        Class<?> diagListenerType = Class.forName("javax.tools.DiagnosticListener");
+        Class<?> fileManagerType = Class.forName("javax.tools.JavaFileManager");
+        Class<?> collectorType = Class.forName("javax.tools.DiagnosticCollector");
+        Class<?> diagType = Class.forName("javax.tools.Diagnostic");
+        Class<?> javacTaskType = Class.forName("com.sun.source.util.JavacTask");
+
+        java.io.File dir = java.io.File.createTempFile("zishu-syntax", "");
+        assertTrue(dir.delete() && dir.mkdir());
+        java.io.File file = new java.io.File(dir, name);
+        java.io.FileOutputStream out = new java.io.FileOutputStream(file);
+        try {
+            out.write(source.getBytes(java.nio.charset.Charset.forName("UTF-8")));
+        } finally {
+            out.close();
         }
-        return errors;
+        try {
+            Object diags = collectorType.getConstructor().newInstance();
+            Object fm = compilerType.getMethod("getStandardFileManager", diagListenerType,
+                    java.util.Locale.class, java.nio.charset.Charset.class).invoke(compiler, null, null, null);
+            Object units = fmType.getMethod("getJavaFileObjects", java.io.File[].class)
+                    .invoke(fm, (Object) new java.io.File[]{file});
+            Object task = compilerType.getMethod("getTask", java.io.Writer.class, fileManagerType, diagListenerType,
+                    Iterable.class, Iterable.class, Iterable.class)
+                    .invoke(compiler, new StringWriter(), fm, diags, Arrays.asList("-proc:none"), null, units);
+            javacTaskType.getMethod("parse").invoke(task);
+            List<String> errors = new ArrayList<String>();
+            List<?> all = (List<?>) collectorType.getMethod("getDiagnostics").invoke(diags);
+            for (Object d : all) {
+                if ("ERROR".equals(String.valueOf(diagType.getMethod("getKind").invoke(d)))) {
+                    Object line = diagType.getMethod("getLineNumber").invoke(d);
+                    Object msg = diagType.getMethod("getMessage", java.util.Locale.class).invoke(d, (Object) null);
+                    errors.add(line + ": " + msg);
+                }
+            }
+            fmType.getMethod("close").invoke(fm);
+            return errors;
+        } finally {
+            file.delete();
+            dir.delete();
+        }
+    }
+
+    @Test
+    public void syntaxParserReportsBrokenJava() throws Exception {
+        assertTrue(javaSyntaxErrors("Good.java", "class Good { void f() { } }").isEmpty());
+        assertFalse(javaSyntaxErrors("Bad.java", "class Bad { void f( { } }").isEmpty());
     }
 
     private static void assertAllXmlWellFormed(Map<String, byte[]> files) {

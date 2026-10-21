@@ -1,0 +1,65 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.zishu.ide'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.zishu.ide'
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    // Release signing is configured ONLY from environment variables, which the release workflow
+    // fills from GitHub secrets. Nothing secret is ever stored in the repository.
+    def releaseKeystore = System.getenv('ZISHU_KEYSTORE_FILE')
+    signingConfigs {
+        if (releaseKeystore != null && !releaseKeystore.isEmpty()) {
+            release {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('ZISHU_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ZISHU_KEY_ALIAS')
+                keyPassword System.getenv('ZISHU_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (releaseKeystore != null && !releaseKeystore.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    testOptions {
+        unitTests.all {
+            // The core tests are plain JVM tests; give the 20k-line highlighter test room.
+            maxHeapSize = '512m'
+        }
+    }
+}
+
+dependencies {
+    // Deliberately no AndroidX: the IDE uses only platform APIs. Tests use JUnit alone.
+    testImplementation 'junit:junit:4.13.2'
+}

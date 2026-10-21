@@ -63,68 +63,85 @@ public final class MainActivity extends BaseActivity {
         page.setPadding(dp(16), dp(12), dp(16), dp(32));
         scroll.addView(page, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // header
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+        // centred header: title, tagline, logo, "Get started"
+        TextView title = Ui.text(this, pal, "Zishu IDE", Ui.Style.HEADLINE);
+        title.setGravity(Gravity.CENTER);
+        page.addView(title, Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 16, 0, 0));
+        TextView tag = Ui.text(this, pal, "Your ideas, anywhere", Ui.Style.BODY);
+        tag.setTextColor(pal.textSecondary);
+        tag.setGravity(Gravity.CENTER);
+        page.addView(tag, Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 4, 0, 0));
+
         android.widget.ImageView logo = new android.widget.ImageView(this);
         logo.setImageResource(R.drawable.zishu_launcher);
-        logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        header.addView(logo, Ui.lp(dp(44), dp(44)));
-        LinearLayout titles = new LinearLayout(this);
-        titles.setOrientation(LinearLayout.VERTICAL);
-        titles.addView(Ui.text(this, pal, "Zishu IDE", Ui.Style.HEADLINE));
-        titles.addView(Ui.text(this, pal, "Build Android apps on your phone", Ui.Style.CAPTION),
-                Ui.lpMargin(this, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 4, 0, 0));
-        header.addView(titles, Ui.weight(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        ((LinearLayout.LayoutParams) titles.getLayoutParams()).leftMargin = dp(12);
-        header.addView(Ui.iconButton(this, pal, R.drawable.ic_settings, "Settings", new View.OnClickListener() {
+        logo.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        logo.setContentDescription("Zishu IDE logo");
+        LinearLayout.LayoutParams lpLogo = Ui.lp(dp(112), dp(112));
+        lpLogo.gravity = Gravity.CENTER_HORIZONTAL;
+        lpLogo.topMargin = dp(28);
+        page.addView(logo, lpLogo);
+
+        TextView started = Ui.text(this, pal, "Get started", Ui.Style.TITLE);
+        started.setTextSize(20);
+        started.setGravity(Gravity.CENTER);
+        page.addView(started, Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 28, 0, 0));
+        TextView sub = Ui.text(this, pal, "Start your new Android project!", Ui.Style.BODY);
+        sub.setGravity(Gravity.CENTER);
+        page.addView(sub, Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 4, 0, 20));
+
+        // menu list (one full-width row per action)
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.addView(menuRow("Create project", R.drawable.ic_add, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, NewProjectActivity.class));
+            }
+        }));
+        menu.addView(menuRow("Open existing project", R.drawable.ic_folder, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                pickProject(false);
+            }
+        }));
+        menu.addView(menuRow("Open folder from device", R.drawable.ic_download, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openFolder();
+            }
+        }));
+        menu.addView(menuRow("Import ZIP", R.drawable.ic_zip, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                importZip();
+            }
+        }));
+        menu.addView(menuRow("Build APK", R.drawable.ic_package, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                pickProject(true);
+            }
+        }));
+        menu.addView(menuRow("Build tools", R.drawable.ic_chip, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, SdkActivity.class));
+            }
+        }));
+        menu.addView(menuRow("Cloud build", R.drawable.ic_cloud, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, CloudSettingsActivity.class));
+            }
+        }));
+        menu.addView(menuRow("Settings", R.drawable.ic_settings, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class));
             }
         }));
-        page.addView(header);
-
-        page.addView(Ui.space(this, 20));
-        page.addView(Ui.button(this, pal, "Create new project", R.drawable.ic_add, Ui.Kind.FILLED, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this, NewProjectActivity.class));
-            }
-        }), Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        // quick actions
-        page.addView(Ui.space(this, 12));
-        LinearLayout row1 = tileRow(
-                tile("Open folder", R.drawable.ic_folder, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        openFolder();
-                    }
-                }),
-                tile("Import ZIP", R.drawable.ic_zip, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        importZip();
-                    }
-                }));
-        page.addView(row1);
-        page.addView(Ui.space(this, 12));
-        LinearLayout row2 = tileRow(
-                tile("Build APK", R.drawable.ic_package, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        pickProjectToBuild();
-                    }
-                }),
-                tile("Build tools", R.drawable.ic_chip, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        startActivity(new Intent(MainActivity.this, SdkActivity.class));
-                    }
-                }));
-        page.addView(row2);
+        LinearLayout.LayoutParams mp = Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        page.addView(menu, mp);
 
         cloudBanner = new LinearLayout(this);
         cloudBanner.setOrientation(LinearLayout.VERTICAL);
@@ -143,33 +160,25 @@ public final class MainActivity extends BaseActivity {
         setScreen(scroll);
     }
 
-    private View tile(String label, int icon, View.OnClickListener l) {
-        LinearLayout t = new LinearLayout(this);
-        t.setOrientation(LinearLayout.VERTICAL);
-        t.setGravity(Gravity.CENTER_VERTICAL);
-        t.setPadding(dp(16), dp(14), dp(16), dp(14));
-        t.setMinimumHeight(dp(88));
-        t.setBackground(Ui.ripple(pal, Ui.rounded(this, pal.surface, pal.outline, 16)));
-        t.setClickable(true);
-        t.setFocusable(true);
-        t.setContentDescription(label);
-        t.addView(Ui.icon(this, icon, pal.primary, 24));
+    private View menuRow(String label, int icon, View.OnClickListener l) {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.HORIZONTAL);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.setPadding(dp(20), dp(0), dp(20), dp(0));
+        r.setMinimumHeight(dp(60));
+        r.setBackground(Ui.ripple(pal, Ui.rounded(this, pal.surface, pal.dark ? 0 : pal.outline, 16)));
+        r.setClickable(true);
+        r.setFocusable(true);
+        r.setContentDescription(label);
+        r.addView(Ui.icon(this, icon, pal.text, 24));
         TextView tv = Ui.text(this, pal, label, Ui.Style.TITLE);
-        t.addView(tv, Ui.lpMargin(this, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
-        t.setOnClickListener(l);
-        return t;
-    }
-
-    private LinearLayout tileRow(View a, View b) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams pa = Ui.weight(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        pa.rightMargin = dp(6);
-        LinearLayout.LayoutParams pb = Ui.weight(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        pb.leftMargin = dp(6);
-        row.addView(a, pa);
-        row.addView(b, pb);
-        return row;
+        tv.setTextSize(17);
+        r.addView(tv, Ui.lpMargin(this, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 16, 0, 0, 0));
+        r.setOnClickListener(l);
+        LinearLayout.LayoutParams p = Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.bottomMargin = dp(12);
+        r.setLayoutParams(p);
+        return r;
     }
 
     // ------------------------------------------------------------------ list
@@ -339,7 +348,7 @@ public final class MainActivity extends BaseActivity {
         startActivity(i);
     }
 
-    private void pickProjectToBuild() {
+    private void pickProject(final boolean forBuild) {
         List<ProjectInfo> all;
         try {
             all = App.projects(this).list();
@@ -348,7 +357,8 @@ public final class MainActivity extends BaseActivity {
             return;
         }
         if (all.isEmpty()) {
-            Ui.message(this, pal, "No projects", "Create or import a project first, then build it from here.");
+            Ui.message(this, pal, "No projects", forBuild ? "Create or import a project first, then build it from here."
+                    : "There are no projects on this phone yet. Create one, or import a ZIP or folder.");
             return;
         }
         final List<ProjectInfo> list = all;
@@ -356,12 +366,17 @@ public final class MainActivity extends BaseActivity {
         for (int i = 0; i < names.length; i++) {
             names[i] = list.get(i).name;
         }
-        Ui.dialog(this, pal).setTitle("Build which project?").setItems(names, new android.content.DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(android.content.DialogInterface d, int which) {
-                startBuildScreen(list.get(which));
-            }
-        }).show();
+        Ui.dialog(this, pal).setTitle(forBuild ? "Build which project?" : "Open which project?")
+                .setItems(names, new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int which) {
+                        if (forBuild) {
+                            startBuildScreen(list.get(which));
+                        } else {
+                            openProject(list.get(which));
+                        }
+                    }
+                }).show();
     }
 
     private void confirmDelete(final ProjectInfo p) {

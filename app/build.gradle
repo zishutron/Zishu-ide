@@ -12,6 +12,10 @@ android {
         targetSdk 35
         versionCode 1
         versionName '0.1.0'
+        // The bundled aapt2 is a 64-bit ARM binary, so the APK carries only that ABI.
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     // Release signing is configured ONLY from environment variables, which the release workflow
@@ -42,6 +46,19 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    // aapt2 is shipped as lib/arm64-v8a/libaapt2.so and executed from the app's native library folder, the only
+    // place Android lets an app run a binary from. That needs the libraries extracted to disk.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += ['**/libaapt2.so']
+        }
+        resources {
+            excludes += ['META-INF/versions/**', 'META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*',
+                         'META-INF/INDEX.LIST', 'META-INF/*.kotlin_module', 'META-INF/AL2.0', 'META-INF/LGPL2.1']
+        }
+    }
+
     buildFeatures {
         buildConfig true
     }
@@ -60,6 +77,12 @@ android {
 }
 
 dependencies {
+    // On-device build engine: Java compiler, dexer, APK signer and certificate generation.
+    implementation 'org.eclipse.jdt:ecj:3.37.0'
+    implementation 'com.android.tools:r8:8.7.18'
+    implementation 'com.android.tools.build:apksig:8.7.3'
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+
     // Deliberately no AndroidX: the IDE uses only platform APIs. Tests use JUnit alone.
     testImplementation 'junit:junit:4.13.2'
 }

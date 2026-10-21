@@ -1,0 +1,94 @@
+name: Build Zishu IDE
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ide-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK platform 35 and build tools 34.0.0
+        run: |
+          set -eu
+          mgr="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$mgr" --licenses > /dev/null || true
+          "$mgr" "platforms;android-35" "build-tools;34.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon --console=plain testDebugUnitTest
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon --console=plain assembleDebug
+
+      - name: Verify the APK
+        run: |
+          set -eu
+          apk=$(ls app/build/outputs/apk/debug/*.apk 2>/dev/null | head -n 1 || true)
+          if [ -z "$apk" ]; then echo "::error::No debug APK was produced"; exit 1; fi
+          bt="$ANDROID_HOME/build-tools/34.0.0"
+          bytes=$(stat -c %s "$apk")
+          echo "APK: $apk ($bytes bytes)"
+          badging=$("$bt/aapt2" dump badging "$apk")
+          echo "$badging" | grep -E "^(package|sdkVersion|targetSdkVersion)"
+          echo "$badging" | grep -q "package: name='com.zishu.ide'" || { echo "::error::Wrong package name"; exit 1; }
+          echo "$badging" | grep -q "sdkVersion:'21'" || { echo "::error::minSdk is not 21"; exit 1; }
+          echo "$badging" | grep -q "targetSdkVersion:'35'" || { echo "::error::targetSdk is not 35"; exit 1; }
+          "$bt/apksigner" verify --verbose "$apk"
+          limit=$((120 * 1024 * 1024))
+          if [ "$bytes" -gt "$limit" ]; then echo "::error::APK is larger than 120 MB"; exit 1; fi
+          {
+            echo "### Zishu IDE debug APK"
+            echo "- Size: $(awk -v b=$bytes 'BEGIN{printf "%.2f MB", b/1048576}') (measured)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: zishu-ide-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload build logs and lint on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
+          if-no-files-found: ignore
+          retention-days: 7

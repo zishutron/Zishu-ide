@@ -1241,6 +1241,8 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
         m.getMenu().add(0, 7, 6, prefs.lineNumbers() ? "Line numbers: on" : "Line numbers: off");
         m.getMenu().add(0, 8, 7, "Font size");
         m.getMenu().add(0, 9, 8, "Build history");
+        m.getMenu().add(0, 10, 9, "Settings");
+        m.getMenu().add(0, 11, 10, "Cloud build settings");
         m.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(android.view.MenuItem item) {
@@ -1272,6 +1274,12 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
                         break;
                     case 8:
                         fontSizeDialog();
+                        break;
+                    case 10:
+                        startActivity(new Intent(EditorActivity.this, SettingsActivity.class));
+                        break;
+                    case 11:
+                        startActivity(new Intent(EditorActivity.this, CloudSettingsActivity.class));
                         break;
                     default:
                         Intent i = new Intent(EditorActivity.this, BuildActivity.class);

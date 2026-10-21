@@ -90,6 +90,15 @@ public abstract class BaseActivity extends Activity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // The theme can be changed on another screen (Settings); pick it up when coming back.
+        if (created && Palette.isDark(this, prefs) != wasDark && allowRecreate()) {
+            recreate();
+        }
+    }
+
     /** Screens holding unsaved work return false so a system theme change cannot discard it. */
     protected boolean allowRecreate() {
         return true;

@@ -15,6 +15,7 @@
     <application
         android:name=".app.App"
         android:allowBackup="false"
+        android:largeHeap="true"
         android:requestLegacyExternalStorage="true"
         android:icon="@drawable/zishu_launcher"
         android:roundIcon="@drawable/zishu_launcher"

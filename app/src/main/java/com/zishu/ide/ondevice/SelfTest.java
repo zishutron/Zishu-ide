@@ -92,6 +92,8 @@ public final class SelfTest {
             } else {
                 r.append("\nRESULT: FAILED - ").append(res.errorTitle).append("\n\n--- log ---\n").append(res.log).append('\n');
             }
+        } catch (com.zishu.ide.core.validation.ValidationException e) {
+            r.append("Self-test could not generate the sample project: ").append(e.getMessage()).append('\n');
         } catch (IOException e) {
             r.append("Self-test could not prepare the sample project: ").append(e.getMessage()).append('\n');
         } catch (RuntimeException e) {

@@ -158,7 +158,7 @@ public final class BuildCoordinator {
                 BuildResult r;
                 try {
                     r = engine.build(request, l, s.cancel);
-                } catch (RuntimeException e) {
+                } catch (Throwable e) {
                     r = BuildResult.failure("Unexpected error: " + e, System.currentTimeMillis() - s.startedAt,
                             engine.id(), "debug", s.log.toString() + "\n" + android.util.Log.getStackTraceString(e), null, null);
                 }

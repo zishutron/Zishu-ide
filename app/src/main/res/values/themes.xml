@@ -24,8 +24,8 @@
         <item name="android:statusBarColor">@android:color/white</item>
         <item name="android:navigationBarColor">@android:color/white</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <!-- Android 12+ splash: white with the logo (older versions ignore these two items). -->
+        <!-- Android 12+ system splash: plain white with no icon (the icon would be cropped to a circle). -->
         <item name="android:windowSplashScreenBackground">@android:color/white</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/zishu_launcher</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
     </style>
 </resources>

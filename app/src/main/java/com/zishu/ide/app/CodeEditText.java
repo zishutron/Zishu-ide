@@ -13,6 +13,8 @@ import android.text.style.ForegroundColorSpan;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.widget.EditText;
 
 import com.zishu.ide.core.editor.CodeEditing;
@@ -306,6 +308,81 @@ public final class CodeEditText extends EditText {
         insertAtCaret(CodeEditing.unit(prefs.tabSize(), prefs.useTabs()), 0);
     }
 
+    // ------------------------------------------------------------------ horizontal drag
+
+    private float dragDownX;
+    private float dragDownY;
+    private int dragStartScrollX;
+    private boolean hDrag;
+    private int widthCacheVersion = -1;
+    private float widthCacheSize;
+    private int widthCacheMax;
+
+    /** The widest line plus padding, minus the view width: how far the text can be scrolled sideways. */
+    private int maxScrollX() {
+        Layout l = getLayout();
+        if (l == null) {
+            return 0;
+        }
+        if (widthCacheVersion != textVersion || widthCacheSize != getTextSize()) {
+            float max = 0;
+            for (int i = 0; i < l.getLineCount(); i++) {
+                max = Math.max(max, l.getLineMax(i));
+            }
+            widthCacheMax = (int) Math.ceil(max);
+            widthCacheVersion = textVersion;
+            widthCacheSize = getTextSize();
+        }
+        return Math.max(0, widthCacheMax + getPaddingLeft() + getPaddingRight() - getWidth());
+    }
+
+    /**
+     * A sideways drag scrolls the text. EditText's own handling often treats it as a cursor move
+     * instead, so once a drag is clearly horizontal the touch is taken over here.
+     */
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                dragDownX = ev.getX();
+                dragDownY = ev.getY();
+                dragStartScrollX = getScrollX();
+                hDrag = false;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (!hDrag && ev.getPointerCount() == 1) {
+                    float dx = ev.getX() - dragDownX;
+                    float dy = ev.getY() - dragDownY;
+                    int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                    if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) * 1.2f && maxScrollX() > 0) {
+                        hDrag = true;
+                        MotionEvent cancel = MotionEvent.obtain(ev);
+                        cancel.setAction(MotionEvent.ACTION_CANCEL);
+                        super.onTouchEvent(cancel);
+                        cancel.recycle();
+                        dragDownX = ev.getX();
+                        dragStartScrollX = getScrollX();
+                    }
+                }
+                if (hDrag) {
+                    int nx = Math.round(dragStartScrollX - (ev.getX() - dragDownX));
+                    scrollTo(Math.max(0, Math.min(nx, maxScrollX())), getScrollY());
+                    return true;
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (hDrag) {
+                    hDrag = false;
+                    return true;
+                }
+                break;
+            default:
+                break;
+        }
+        return super.onTouchEvent(ev);
+    }
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_TAB && prefs != null) {
@@ -544,7 +621,7 @@ public final class CodeEditText extends EditText {
         }
         if (!showLineNumbers) {
             gutterWidth = 0;
-            setPadding(Ui.dp(getContext(), 10), Ui.dp(getContext(), 8), Ui.dp(getContext(), 16), Ui.dp(getContext(), 120));
+            setPadding(Ui.dp(getContext(), 10), Ui.dp(getContext(), 8), Ui.dp(getContext(), 16), Ui.dp(getContext(), 8));
             return;
         }
         int lines = Math.max(1, getLineCount());
@@ -554,7 +631,7 @@ public final class CodeEditText extends EditText {
         int newWidth = Math.round(charW * d) + Ui.dp(getContext(), 22);
         if (newWidth != gutterWidth || getPaddingLeft() != newWidth + Ui.dp(getContext(), 6)) {
             gutterWidth = newWidth;
-            setPadding(gutterWidth + Ui.dp(getContext(), 6), Ui.dp(getContext(), 8), Ui.dp(getContext(), 16), Ui.dp(getContext(), 120));
+            setPadding(gutterWidth + Ui.dp(getContext(), 6), Ui.dp(getContext(), 8), Ui.dp(getContext(), 16), Ui.dp(getContext(), 8));
         }
     }
 

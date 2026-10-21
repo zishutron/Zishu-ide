@@ -1,0 +1,37 @@
+Zishu IDE - Proprietary License
+
+Copyright (c) 2026 zishutron. All rights reserved.
+
+1. Ownership. Zishu IDE, including its source code, design, user interface, text, documentation, icons and
+   workflow files (the "Software"), is the original work of the copyright holder named above. All title,
+   copyright and other intellectual property rights in the Software remain with the copyright holder.
+
+2. No license granted by default. Except as stated in section 3, no right is granted to use, copy, modify,
+   merge, publish, distribute, sublicense, sell, host, or create derivative works of the Software, in whole
+   or in part, in source or binary form.
+
+3. Permitted without further permission:
+   a. Viewing the source code in this repository, where the repository is made visible to you.
+   b. Installing and using the officially published Zishu IDE application for your own purposes.
+   c. Your projects. Apps, projects and files you create with Zishu IDE belong to you. The project
+      templates and code that Zishu IDE generates for you may be used, changed and distributed by you
+      without restriction, including commercially.
+
+4. Restrictions. You may not, without prior written permission of the copyright holder:
+   a. copy, fork for redistribution, republish or host the Software or substantial parts of it;
+   b. remove or alter copyright notices or this license;
+   c. present the Software, or work derived from it, as your own;
+   d. use the name "Zishu IDE", its logo or its icon to identify another product;
+   e. reverse engineer or decompile the application except where applicable law allows it despite this restriction.
+
+5. Third-party components. The Software includes or downloads third-party components, listed in
+   THIRD_PARTY_NOTICES.md, that are licensed by their own authors under their own terms. This license does not
+   change those terms, and the copyright holder claims no ownership of those components.
+
+6. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+   BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+7. Termination. Any breach of this license ends the permissions in section 3 automatically.
+
+Permission requests: contact the copyright holder through the GitHub account named above.

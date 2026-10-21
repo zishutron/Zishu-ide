@@ -87,6 +87,15 @@ public final class Prefs {
         sp.edit().putBoolean("highlighting", v).apply();
     }
 
+    /** "auto" (on this phone when possible, else cloud), "device" or "cloud". */
+    public String engineChoice() {
+        return sp.getString("engineChoice", "auto");
+    }
+
+    public void setEngineChoice(String v) {
+        sp.edit().putString("engineChoice", v).apply();
+    }
+
     // ---- cloud build (the token itself is NOT here)
 
     public String cloudRepo() {

@@ -7,8 +7,11 @@ import com.zishu.ide.core.build.CloudBuildEngine;
 import com.zishu.ide.core.build.LocalBuildEngine;
 import com.zishu.ide.core.build.Toolchain;
 import com.zishu.ide.core.build.UrlTransport;
+import com.zishu.ide.core.ondevice.OnDeviceBuildEngine;
+import com.zishu.ide.ondevice.AndroidTools;
 import com.zishu.ide.core.util.IoUtil;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -42,5 +45,22 @@ public final class Engines {
 
     public static BuildEngine local() {
         return new LocalBuildEngine(Toolchain.fromEnvironment(), 30L * 60 * 1000);
+    }
+
+    public static OnDeviceBuildEngine onDevice(Context c) {
+        return new OnDeviceBuildEngine(new AndroidTools(c), new File(c.getCacheDir(), "ondevice"));
+    }
+
+    /** The engine the user's choice and the phone's abilities select: "device", "cloud" or automatic. */
+    public static BuildEngine preferred(Context c) {
+        String choice = App.prefs(c).engineChoice();
+        if ("cloud".equals(choice)) {
+            return cloud(c);
+        }
+        OnDeviceBuildEngine d = onDevice(c);
+        if (d.status().available || "device".equals(choice)) {
+            return d;
+        }
+        return cloud(c);
     }
 }

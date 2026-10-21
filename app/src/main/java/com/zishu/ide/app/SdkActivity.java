@@ -51,10 +51,34 @@ public final class SdkActivity extends BaseActivity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(16), dp(8), dp(16), dp(24));
 
-        page.addView(Ui.banner(this, pal, R.drawable.ic_warning, pal.warning, "Builds do not run on this phone",
-                "Android does not let an app run a JDK, Gradle or the Android SDK's native tools (aapt2, d8) from its own storage, "
-                        + "and the SDK is several gigabytes. Zishu IDE therefore builds in the cloud on GitHub Actions. "
-                        + "Nothing is downloaded to this phone for building, and there is no managed SDK download in this version."));
+        final BuildEngine device = Engines.onDevice(this);
+        BuildEngine.Status ds = device.status();
+        page.addView(Ui.section(this, pal, "On-phone build (aapt2, ECJ, D8)"));
+        page.addView(row("On-phone engine", ds.available ? "Ready" : "Unavailable", ds.available ? pal.success : pal.warning,
+                ds.available ? ds.reason : ds.reason + (ds.action == null ? "" : " " + ds.action)));
+        page.addView(Ui.button(this, pal, "Run toolchain self-test", R.drawable.ic_play, Ui.Kind.FILLED, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                final android.app.AlertDialog d = Ui.progress(SdkActivity.this, pal, "Building a sample app on this phone…");
+                d.show();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        final String report = com.zishu.ide.ondevice.SelfTest.run(SdkActivity.this);
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                d.dismiss();
+                                Ui.message(SdkActivity.this, pal, "Self-test result", report);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        }), Ui.lpMargin(this, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 8, 0, 0));
+        page.addView(Ui.text(this, pal, "The self-test builds a generated sample project with the real tools and reports each stage. "
+                + "It does not install anything.", Ui.Style.CAPTION),
+                Ui.lpMargin(this, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 4, 8, 0, 0));
 
         page.addView(Ui.section(this, pal, "Cloud build (GitHub Actions)"));
         BuildEngine cloud = Engines.cloud(this);

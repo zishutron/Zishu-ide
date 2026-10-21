@@ -192,9 +192,13 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
 
         // engine card
         engineBox.removeAllViews();
-        BuildEngine engine = Engines.cloud(this);
+        BuildEngine engine = Engines.preferred(this);
         BuildEngine.Status st = engine.status();
-        if (st.available) {
+        final boolean onDevice = com.zishu.ide.core.ondevice.OnDeviceBuildEngine.ID.equals(engine.id());
+        if (st.available && onDevice) {
+            engineBox.addView(Ui.banner(this, pal, R.drawable.ic_phone, pal.primary, "Build on this phone",
+                    st.reason + " Simple Java projects only (no Kotlin, no downloaded libraries)."));
+        } else if (st.available) {
             engineBox.addView(Ui.banner(this, pal, R.drawable.ic_cloud, pal.primary, "GitHub Actions cloud build",
                     st.reason + " The project's source is uploaded to that repository for the build."));
         } else {
@@ -206,6 +210,17 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
                         @Override
                         public void onClick(View v) {
                             startActivity(new Intent(BuildActivity.this, CloudSettingsActivity.class));
+                        }
+                    }), Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
+        }
+
+        if (!runningHere) {
+            engineBox.addView(Ui.button(this, pal, onDevice ? "Use cloud build instead" : "Use on-phone build instead",
+                    onDevice ? R.drawable.ic_cloud : R.drawable.ic_phone, Ui.Kind.TONAL, new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            App.prefs(BuildActivity.this).setEngineChoice(onDevice ? "cloud" : "device");
+                            refresh();
                         }
                     }), Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
         }
@@ -293,10 +308,10 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
     }
 
     private void startBuild() {
-        BuildEngine engine = Engines.cloud(this);
+        BuildEngine engine = Engines.preferred(this);
         BuildEngine.Status st = engine.status();
         if (!st.available) {
-            Ui.message(this, pal, "Cloud build is not set up", st.reason + "\n\n" + st.action);
+            Ui.message(this, pal, "Build engine is not ready", st.reason + "\n\n" + st.action);
             return;
         }
         if (!BuildCoordinator.get().start(this, project, engine)) {

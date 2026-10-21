@@ -129,7 +129,7 @@ public final class NewProjectActivity extends BaseActivity {
         fName = Ui.field(this, pal, "Project name", "My App", d.projectName, InputType.TYPE_CLASS_TEXT);
         fAppName = Ui.field(this, pal, "App display name", "Shown under the launcher icon", d.appName, InputType.TYPE_CLASS_TEXT);
         fId = Ui.field(this, pal, "Application ID", "com.example.myapp", d.applicationId,
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         addGap(page, fName.view);
         addGap(page, fAppName.view);
         addGap(page, fId.view);

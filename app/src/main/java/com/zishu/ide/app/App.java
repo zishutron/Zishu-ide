@@ -27,13 +27,26 @@ public final class App extends Application {
     }
 
     /** The workspace lives in app-private storage: no storage permission is needed and other apps cannot read it. */
-    public static File workspaceDir(Context c) {
+    public static File privateWorkspaceDir(Context c) {
         return new File(c.getApplicationContext().getFilesDir(), "workspace");
     }
 
+    /**
+     * Where projects live. By default app-private storage; if the user chose the visible phone folder
+     * and Android has granted access, /storage/emulated/0/ZishuIDE. If access is later revoked this falls
+     * back to the private folder instead of failing.
+     */
+    public static File workspaceDir(Context c) {
+        if (prefs(c).sharedStorage() && StorageAccess.granted(c)) {
+            return StorageAccess.sharedDir();
+        }
+        return privateWorkspaceDir(c);
+    }
+
     public static synchronized ProjectManager projects(Context c) throws IOException {
-        if (projects == null) {
-            projects = new ProjectManager(workspaceDir(c));
+        File w = workspaceDir(c);
+        if (projects == null || !projects.getRoot().equals(w)) {
+            projects = new ProjectManager(w);
         }
         return projects;
     }

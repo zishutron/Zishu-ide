@@ -194,6 +194,11 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             cleanQuietly(work);
             return BuildResult.failure("The phone ran out of memory while building. Close other apps and try again.",
                     elapsed(start), ID, variant, log.text(), null, null);
+        } catch (LinkageError e) {
+            // A class or native library the tools need is missing or broken (NoClassDefFoundError, UnsatisfiedLinkError...).
+            return unexpected(e, work, start, variant, log);
+        } catch (StackOverflowError e) {
+            return unexpected(e, work, start, variant, log);
         }
     }
 

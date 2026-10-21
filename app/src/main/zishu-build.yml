@@ -1,0 +1,184 @@
+# Zishu IDE cloud build workflow (version 1).
+# Installed into YOUR build repository by Zishu IDE (or by you). It builds the project that the
+# app uploads to a temporary branch "zishu-job-<id>" and publishes the APK as a short-lived artifact.
+# It runs only when started by hand or by the app (workflow_dispatch); it has read-only repo access.
+name: Zishu build
+run-name: Zishu build ${{ inputs.job_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Build id created by Zishu IDE (12 hex characters)"
+        required: true
+        type: string
+      job_ref:
+        description: "Temporary branch that holds the uploaded project"
+        required: true
+        type: string
+      variant:
+        description: "Build variant"
+        required: false
+        default: debug
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zishu-build-${{ inputs.job_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      JOB_REF: ${{ inputs.job_ref }}
+      VARIANT: ${{ inputs.variant }}
+    steps:
+      - name: Validate inputs
+        run: |
+          set -eu
+          case "$JOB_ID" in
+            *[!0-9a-f]*|"") echo "::error::job_id must be lowercase hex"; exit 1 ;;
+          esac
+          if [ "${#JOB_ID}" -ne 12 ]; then echo "::error::job_id must be 12 characters"; exit 1; fi
+          if [ "$JOB_REF" != "zishu-job-$JOB_ID" ]; then echo "::error::job_ref does not match job_id"; exit 1; fi
+          if [ "$VARIANT" != "debug" ]; then echo "::error::Only the debug variant is supported"; exit 1; fi
+
+      - name: Check out the uploaded project branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.job_ref }}
+          persist-credentials: false
+
+      - name: Unpack the project safely
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import os, sys, zipfile, stat
+          job = os.environ["JOB_ID"]
+          src = "zishu-jobs/%s/project.zip" % job
+          dest = os.path.abspath("work/project")
+          os.makedirs(dest, exist_ok=True)
+          MAX_FILES, MAX_TOTAL = 20000, 600 * 1024 * 1024
+          total = 0
+          with zipfile.ZipFile(src) as z:
+              infos = z.infolist()
+              if len(infos) > MAX_FILES:
+                  sys.exit("::error::The project has too many files")
+              for i in infos:
+                  name = i.filename
+                  if name.startswith("/") or "\\" in name or any(p == ".." for p in name.split("/")):
+                      sys.exit("::error::Unsafe path in project zip: %r" % name)
+                  if (i.external_attr >> 16) & 0o170000 == stat.S_IFLNK:
+                      sys.exit("::error::Symbolic links are not allowed: %r" % name)
+                  total += i.file_size
+                  if total > MAX_TOTAL:
+                      sys.exit("::error::The project is too large when unpacked")
+                  target = os.path.abspath(os.path.join(dest, name))
+                  if target != dest and not target.startswith(dest + os.sep):
+                      sys.exit("::error::Path escapes the project folder: %r" % name)
+              z.extractall(dest)
+          print("Unpacked %d entries, %d bytes" % (len(infos), total))
+          PY
+
+      - name: Locate the Gradle project
+        id: locate
+        run: |
+          set -eu
+          root=""
+          for c in work/project work/project/*; do
+            if [ -f "$c/settings.gradle" ] || [ -f "$c/settings.gradle.kts" ]; then root="$c"; break; fi
+          done
+          if [ -z "$root" ]; then
+            echo "::error::No settings.gradle or settings.gradle.kts found at the top of the project"
+            exit 1
+          fi
+          echo "root=$root" >> "$GITHUB_OUTPUT"
+          if [ -f "$root/gradlew" ]; then echo "wrapper=true" >> "$GITHUB_OUTPUT"; else echo "wrapper=false" >> "$GITHUB_OUTPUT"; fi
+          echo "Project root: $root"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install the Android SDK platform the project needs
+        env:
+          PROJECT_ROOT: ${{ steps.locate.outputs.root }}
+        run: |
+          set -eu
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$sdk" ]; then echo "::error::ANDROID_HOME is not set on this runner"; exit 1; fi
+          level=$(python3 - <<'PY'
+          import os, re
+          root = os.environ["PROJECT_ROOT"]
+          best = 35
+          for rel in ("app/build.gradle", "app/build.gradle.kts", "build.gradle", "build.gradle.kts"):
+              p = os.path.join(root, rel)
+              if os.path.isfile(p):
+                  m = re.search(r"compileSdk(?:Version)?\s*(?:=\s*)?\(?\s*(\d+)", open(p, errors="replace").read())
+                  if m:
+                      best = int(m.group(1)); break
+          print(best)
+          PY
+          )
+          echo "compileSdk = $level"
+          mgr="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$mgr" ]; then echo "::error::sdkmanager not found at $mgr"; exit 1; fi
+          yes | "$mgr" --licenses > /dev/null || true
+          "$mgr" "platforms;android-$level" "build-tools;34.0.0"
+
+      - name: Set up Gradle (project has no wrapper)
+        if: steps.locate.outputs.wrapper == 'false'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        env:
+          PROJECT_ROOT: ${{ steps.locate.outputs.root }}
+          HAS_WRAPPER: ${{ steps.locate.outputs.wrapper }}
+        run: |
+          set -eu
+          cd "$PROJECT_ROOT"
+          if [ "$HAS_WRAPPER" = "true" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace --console=plain
+          else
+            gradle assembleDebug --no-daemon --stacktrace --console=plain
+          fi
+
+      - name: Verify the APK
+        env:
+          PROJECT_ROOT: ${{ steps.locate.outputs.root }}
+        run: |
+          set -eu
+          apk=$(find "$PROJECT_ROOT" -path '*/build/outputs/apk/debug/*.apk' -type f | head -n 1)
+          if [ -z "$apk" ]; then echo "::error::Gradle finished but produced no debug APK"; exit 1; fi
+          bt="$ANDROID_HOME/build-tools/34.0.0"
+          mkdir -p out
+          name=$(basename "$apk" | tr -c 'A-Za-z0-9._-\n' '_')
+          cp "$apk" "out/$name"
+          {
+            echo "file: $name"
+            echo "bytes: $(stat -c %s "out/$name")"
+            "$bt/aapt2" dump badging "out/$name" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label:)" || true
+            echo "--- apksigner verify ---"
+            "$bt/apksigner" verify --verbose "out/$name"
+          } | tee out/apk-info.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: zishu-apk-${{ inputs.job_id }}
+          path: |
+            out/*.apk
+            out/apk-info.txt
+          if-no-files-found: error
+          retention-days: 1

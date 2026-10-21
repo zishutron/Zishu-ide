@@ -33,13 +33,18 @@ jobs:
           set -eu
           mgr="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$mgr" --licenses > /dev/null || true
-          "$mgr" "platforms;android-35" "build-tools;34.0.0"
+          "$mgr" "platforms;android-35" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
+
+      - name: Fetch on-device toolchain (aapt2 + android.jar)
+        id: toolchain
+        continue-on-error: true
+        run: sh scripts/fetch-toolchain.sh
 
       - name: Unit tests
         run: ./gradlew --no-daemon --console=plain testDebugUnitTest
@@ -63,8 +68,15 @@ jobs:
           "$bt/apksigner" verify --verbose "$apk"
           limit=$((120 * 1024 * 1024))
           if [ "$bytes" -gt "$limit" ]; then echo "::error::APK is larger than 120 MB"; exit 1; fi
+          if unzip -l "$apk" | grep -q "lib/arm64-v8a/libaapt2.so" && unzip -l "$apk" | grep -q "assets/toolchain/android.jar"; then
+            tool="bundled (aapt2 + android.jar)"
+          else
+            tool="NOT bundled - the on-phone build will report the toolchain as missing"
+            echo "::warning::On-device toolchain is not in the APK (see the 'Fetch on-device toolchain' step)"
+          fi
           {
             echo "### Zishu IDE debug APK"
+            echo "- On-device toolchain: $tool"
             echo "- Size: $(awk -v b=$bytes 'BEGIN{printf "%.2f MB", b/1048576}') (measured)"
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -36,6 +36,9 @@ public final class MainActivity extends BaseActivity {
     private static final int FILTER_NATIVE = 1;
     private static final int FILTER_WEB = 2;
 
+    private static boolean storagePrompted;
+    private static boolean movePrompted;
+
     private final Handler main = new Handler(Looper.getMainLooper());
     private LinearLayout recentBox;
     private LinearLayout cloudBanner;
@@ -52,6 +55,98 @@ public final class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         refresh();
+        checkStorage();
+    }
+
+    /** Projects live in the visible ZishuIDE folder, so ask for the storage permission once per app start. */
+    private void checkStorage() {
+        if (!prefs.sharedStorage()) {
+            return;
+        }
+        if (!StorageAccess.granted(this)) {
+            if (!storagePrompted) {
+                storagePrompted = true;
+                askStorage();
+            }
+            return;
+        }
+        final java.io.File priv = App.privateWorkspaceDir(this);
+        int n = 0;
+        java.io.File[] kids = priv.listFiles();
+        if (kids != null) {
+            for (java.io.File k : kids) {
+                if (k.isDirectory() && ProjectInfo.read(k) != null) {
+                    n++;
+                }
+            }
+        }
+        if (n > 0 && !movePrompted) {
+            movePrompted = true;
+            final int count = n;
+            Ui.dialog(this, pal).setTitle("Move projects to the ZishuIDE folder?")
+                    .setMessage(count + " project" + (count == 1 ? " is" : "s are") + " still stored privately inside the app. "
+                            + "Move " + (count == 1 ? "it" : "them") + " to " + StorageAccess.sharedDir().getPath()
+                            + " so you can see and edit the files in your file manager?")
+                    .setNegativeButton("Later", null)
+                    .setPositiveButton("Move", new android.content.DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(android.content.DialogInterface d, int w) {
+                            movePrivateProjects(priv);
+                        }
+                    }).show();
+        }
+    }
+
+    private void askStorage() {
+        Ui.dialog(this, pal).setTitle("Allow access to phone storage")
+                .setMessage("Zishu IDE keeps every project as a normal folder in " + StorageAccess.sharedDir().getPath()
+                        + " so you can open, copy and replace files from your file manager. Android needs your permission for that. "
+                        + "Zishu IDE only uses its own ZishuIDE folder.")
+                .setNegativeButton("Not now", null)
+                .setPositiveButton("Allow", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        StorageAccess.request(MainActivity.this);
+                    }
+                }).show();
+    }
+
+    private void movePrivateProjects(final java.io.File from) {
+        final android.app.AlertDialog wait = Ui.progress(this, pal, "Moving projects\u2026");
+        wait.show();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String msg;
+                try {
+                    com.zishu.ide.core.project.WorkspaceMover.Result r =
+                            com.zishu.ide.core.project.WorkspaceMover.moveAll(from, StorageAccess.sharedDir());
+                    StringBuilder sb = new StringBuilder("Moved " + r.moved + " project" + (r.moved == 1 ? "" : "s") + ".");
+                    for (String f : r.failed) {
+                        sb.append("\nNot moved (still in the app): ").append(f);
+                    }
+                    msg = sb.toString();
+                } catch (IOException e) {
+                    msg = "Could not move the projects: " + e.getMessage();
+                }
+                final String text = msg;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        wait.dismiss();
+                        Ui.message(MainActivity.this, pal, "Move finished", text);
+                        refresh();
+                    }
+                });
+            }
+        }, "zishu-move").start();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        refresh();
+        checkStorage();
     }
 
     private void buildUi() {
@@ -186,6 +281,18 @@ public final class MainActivity extends BaseActivity {
     private void refresh() {
         // cloud banner
         cloudBanner.removeAllViews();
+        if (prefs.sharedStorage() && !StorageAccess.granted(this)) {
+            LinearLayout sb = Ui.banner(this, pal, R.drawable.ic_folder, pal.warning, "Storage access needed",
+                    "Projects are kept in the ZishuIDE folder on your phone. Tap to allow access. Until then they stay inside the app.");
+            sb.setClickable(true);
+            sb.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    askStorage();
+                }
+            });
+            cloudBanner.addView(sb, Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 0, 10));
+        }
         com.zishu.ide.core.build.BuildEngine.Status st = Engines.cloud(this).status();
         if (!st.available) {
             LinearLayout b = Ui.banner(this, pal, R.drawable.ic_cloud, pal.warning, "Cloud build is not set up",

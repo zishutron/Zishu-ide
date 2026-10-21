@@ -6,9 +6,16 @@
     <!-- Needed only for the "Install" button on a finished APK (Android asks the user to allow it). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Only used if the user turns on "Phone storage" in Settings, so projects appear in the ZishuIDE folder
+         that file managers can see. Android 11+ asks via the "All files access" switch. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
     <application
         android:name=".app.App"
         android:allowBackup="false"
+        android:requestLegacyExternalStorage="true"
         android:icon="@drawable/zishu_launcher"
         android:roundIcon="@drawable/zishu_launcher"
         android:label="@string/app_name"

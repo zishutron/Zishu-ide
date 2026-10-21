@@ -1,0 +1,20 @@
+<resources>
+    <!-- All screens are built in code with the design system in Palette/Ui; these themes only set the window. -->
+    <style name="Theme.Zishu.Light" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_light</item>
+        <item name="android:colorAccent">#4B2FC4</item>
+        <item name="android:colorPrimary">#4B2FC4</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <style name="Theme.Zishu.Dark" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_dark</item>
+        <item name="android:colorAccent">#B7A6FF</item>
+        <item name="android:colorPrimary">#B7A6FF</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>

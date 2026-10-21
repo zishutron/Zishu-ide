@@ -48,6 +48,15 @@ public final class MainActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        final String crash = App.takeCrashReport(this);
+        if (crash != null) {
+            handlerPost(new Runnable() {
+                @Override
+                public void run() {
+                    Ui.message(MainActivity.this, pal, "The app crashed last time", crash);
+                }
+            });
+        }
         buildUi();
     }
 
@@ -293,7 +302,7 @@ public final class MainActivity extends BaseActivity {
             });
             cloudBanner.addView(sb, Ui.lpMargin(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 0, 10));
         }
-        com.zishu.ide.core.build.BuildEngine.Status st = Engines.cloud(this).status();
+        com.zishu.ide.core.build.BuildEngine.Status st = Engines.preferred(this).status();
         if (!st.available) {
             LinearLayout b = Ui.banner(this, pal, R.drawable.ic_cloud, pal.warning, "Cloud build is not set up",
                     st.reason + " Tap to set it up.");
@@ -632,5 +641,9 @@ public final class MainActivity extends BaseActivity {
                 });
             }
         }, "zishu-io").start();
+    }
+
+    private void handlerPost(Runnable r) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(r, 600);
     }
 }

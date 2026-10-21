@@ -78,7 +78,7 @@ android {
 
 dependencies {
     // On-device build engine: Java compiler, dexer, APK signer and certificate generation.
-    implementation 'org.eclipse.jdt:ecj:3.37.0'
+    implementation 'org.eclipse.jdt:ecj:3.25.0'
     implementation 'com.android.tools:r8:8.7.18'
     implementation 'com.android.tools.build:apksig:8.7.3'
     implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'

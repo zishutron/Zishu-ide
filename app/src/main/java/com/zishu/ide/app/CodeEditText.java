@@ -118,7 +118,7 @@ public final class CodeEditText extends EditText {
         setBackground(null);
         setIncludeFontPadding(false);
         setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         setHorizontallyScrolling(true);
         setVerticalScrollBarEnabled(true);

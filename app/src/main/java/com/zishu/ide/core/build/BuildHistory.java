@@ -72,6 +72,38 @@ public final class BuildHistory {
         return buildDir(id);
     }
 
+    /** Folder in the project that file managers show (the .zishu folder is hidden). */
+    public static final String VISIBLE_APK_DIR = "apk";
+
+    public File visibleApkDir() {
+        return new File(projectDir, VISIBLE_APK_DIR);
+    }
+
+    /**
+     * Copies a built APK into the project's visible {@code apk/} folder (same file name; a newer build of the
+     * same app replaces the older copy) and returns the copy.
+     */
+    public File publishApk(File apk) throws IOException {
+        File dir = visibleApkDir();
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IOException("Cannot create " + dir);
+        }
+        File target = new File(dir, apk.getName());
+        java.io.InputStream in = new java.io.FileInputStream(apk);
+        try {
+            IoUtil.writeAtomic(target, IoUtil.readAll(in, 1024L * 1024 * 1024));
+        } finally {
+            IoUtil.closeQuietly(in);
+        }
+        return target;
+    }
+
+    /** The visible copy of a built APK, or the original when no copy exists. */
+    public File preferVisible(File apk) {
+        File v = new File(visibleApkDir(), apk.getName());
+        return v.isFile() ? v : apk;
+    }
+
     public List<Entry> list() {
         List<Entry> out = new ArrayList<Entry>();
         File f = indexFile();

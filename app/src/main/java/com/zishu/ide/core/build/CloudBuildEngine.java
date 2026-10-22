@@ -133,7 +133,7 @@ public final class CloudBuildEngine implements BuildEngine {
             // 2. package
             listener.onStage(BuildStage.PACKAGE, null);
             ByteArrayOutputStream zipOut = new ByteArrayOutputStream();
-            SafeZip.zipDirectory(request.project.dir, zipOut, SafeZip.DEFAULT_EXCLUDES, MAX_PROJECT_ZIP_BYTES * 3);
+            SafeZip.zipDirectory(request.project.dir, zipOut, SafeZip.CLOUD_EXCLUDES, MAX_PROJECT_ZIP_BYTES * 3);
             byte[] zipBytes = zipOut.toByteArray();
             if (zipBytes.length > MAX_PROJECT_ZIP_BYTES) {
                 throw new IOException("The packaged project is " + IoUtil.formatSize(zipBytes.length)

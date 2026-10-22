@@ -202,29 +202,27 @@ public final class ProjectManager {
 
     // ------------------------------------------------------------------ import
 
-    /** Imports a ZIP containing a Gradle project. Fails (and leaves nothing behind) for anything else. */
+    /** What an import produced: the registered project and everything the importer decided on the way. */
+    public static final class ImportOutcome {
+        public final ProjectInfo info;
+        public final java.util.List<String> notes;
+
+        ImportOutcome(ProjectInfo info, java.util.List<String> notes) {
+            this.info = info;
+            this.notes = notes;
+        }
+    }
+
+    /** Imports a ZIP containing an Android project, with or without Gradle files. */
     public ProjectInfo importZip(InputStream zip, String suggestedName) throws IOException {
+        return importZipDetailed(zip, suggestedName).info;
+    }
+
+    public ImportOutcome importZipDetailed(InputStream zip, String suggestedName) throws IOException {
         File tmp = new File(root, ".import-" + System.nanoTime());
         try {
             SafeZip.extract(zip, tmp, new SafeZip.Limits());
-            File projectRoot = ProjectLocator.findGradleRoot(tmp);
-            if (projectRoot == null) {
-                if (ProjectLocator.findWebRoot(tmp) != null) {
-                    throw new NotAProjectException("This archive holds web files (it has an index.html) but no Gradle "
-                            + "project. Create a Local WebView project and choose \"Use web files from a ZIP\".");
-                }
-                throw new NotAProjectException("No Android Gradle project was found in the archive. A project needs a "
-                        + "settings.gradle or build.gradle file at its top level.");
-            }
-            String base = suggestedName == null ? "imported" : suggestedName;
-            if (base.toLowerCase(java.util.Locale.US).endsWith(".zip")) {
-                base = base.substring(0, base.length() - 4);
-            }
-            File dest = uniqueDir(base);
-            if (!projectRoot.renameTo(dest)) {
-                throw new IOException("Could not move the imported project into the workspace");
-            }
-            return registerImported(dest, dest.getName());
+            return adopt(tmp, suggestedName);
         } finally {
             try {
                 IoUtil.deleteRecursively(tmp);
@@ -234,14 +232,59 @@ public final class ProjectManager {
         }
     }
 
+    /**
+     * Normalises an extracted tree (ZIP, cloned repository) and moves it into the workspace as a new
+     * project. The extracted directory is consumed.
+     */
+    public ImportOutcome adopt(File extracted, String suggestedName) throws IOException {
+        String base = suggestedName == null || suggestedName.trim().length() == 0 ? "imported" : suggestedName.trim();
+        if (base.toLowerCase(java.util.Locale.US).endsWith(".zip")) {
+            base = base.substring(0, base.length() - 4);
+        }
+        ProjectImporter.Result r;
+        try {
+            r = ProjectImporter.normalize(extracted, base);
+        } catch (ProjectImporter.NoAppFoundException e) {
+            if (ProjectLocator.findWebRoot(extracted) != null) {
+                throw new NotAProjectException("This archive holds web files (it has an index.html) but no Android "
+                        + "app. Create a Local WebView project and choose \"Use web files from a ZIP\".");
+            }
+            throw new NotAProjectException(e.getMessage());
+        }
+        File dest = uniqueDir(base);
+        if (!r.root.renameTo(dest)) {
+            throw new IOException("Could not move the imported project into the workspace");
+        }
+        return new ImportOutcome(writeImportedInfo(dest, dest.getName(), r), r.notes);
+    }
+
     /** Registers a directory that was copied into the workspace (e.g. from a document tree). */
     public ProjectInfo registerImported(File dir, String name) throws IOException {
-        if (!ProjectLocator.looksLikeGradleProject(dir)) {
-            throw new NotAProjectException("No settings.gradle or build.gradle file was found in the selected folder.");
+        return registerImportedDetailed(dir, name).info;
+    }
+
+    public ImportOutcome registerImportedDetailed(File dir, String name) throws IOException {
+        ProjectImporter.Result r;
+        try {
+            r = ProjectImporter.normalize(dir, name);
+        } catch (ProjectImporter.NoAppFoundException e) {
+            throw new NotAProjectException(e.getMessage());
         }
+        File finalDir = dir;
+        if (!r.root.equals(dir)) {
+            finalDir = uniqueDir(name);
+            if (!r.root.renameTo(finalDir)) {
+                throw new IOException("Could not move the project folder");
+            }
+            deleteQuietly(dir);
+        }
+        return new ImportOutcome(writeImportedInfo(finalDir, name, r), r.notes);
+    }
+
+    private ProjectInfo writeImportedInfo(File dir, String name, ProjectImporter.Result r) throws IOException {
         long now = System.currentTimeMillis();
-        ProjectInfo info = new ProjectInfo(dir, name, ProjectType.IMPORTED,
-                com.zishu.ide.core.model.Language.JAVA, "", "", "", now, now);
+        ProjectInfo info = new ProjectInfo(dir, name, ProjectType.IMPORTED, r.language, r.appName, r.applicationId,
+                "", now, now);
         info.write();
         return info;
     }

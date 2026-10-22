@@ -236,6 +236,20 @@ public final class SafeZip {
             new HashSet<String>(Arrays.asList("build", ".gradle", ".git", ".idea", ".zishu", ".cxx")));
 
     /**
+     * What a cloud build upload leaves out: everything in DEFAULT_EXCLUDES plus the project's top-level
+     * apk/ (built APKs) and keystore/ (signing keys must never leave the phone). A leading slash means
+     * "only at the top level of the project".
+     */
+    public static final Set<String> CLOUD_EXCLUDES;
+
+    static {
+        Set<String> s = new HashSet<String>(DEFAULT_EXCLUDES);
+        s.add("/apk");
+        s.add("/keystore");
+        CLOUD_EXCLUDES = Collections.unmodifiableSet(s);
+    }
+
+    /**
      * Zips a directory. Entries are sorted so the output is reproducible; symbolic links are
      * skipped; local.properties is excluded because it may hold machine specific paths.
      */
@@ -265,7 +279,7 @@ public final class SafeZip {
                 continue;
             }
             if (f.isDirectory()) {
-                if (excludes != null && excludes.contains(name)) {
+                if (excludes != null && (excludes.contains(name) || (prefix.length() == 0 && excludes.contains("/" + name)))) {
                     continue;
                 }
                 zout.putNextEntry(new ZipEntry(prefix + name + "/"));

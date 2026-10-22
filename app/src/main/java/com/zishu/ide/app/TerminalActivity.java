@@ -45,6 +45,7 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TerminalState state;
     private IdeCommands ide;
+    private TerminalActions actions;
     private TextView output;
     private ScrollView scroll;
     private EditText input;
@@ -58,6 +59,12 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
         super.onCreate(savedInstanceState);
         state = TerminalState.get(this);
         state.attach(this, pal);
+        actions = new TerminalActions(this, pal, state, new Runnable() {
+            @Override
+            public void run() {
+                updatePrompt();
+            }
+        });
         ide = new IdeCommands(new Host());
 
         String dirName = getIntent().getStringExtra(EXTRA_PROJECT);
@@ -503,5 +510,51 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
         public void clearScreen() {
             state.clear();
         }
+
+        @Override
+        public String downloadApk(File apk) {
+            return actions.downloadApk(apk);
+        }
+
+        @Override
+        public String signApk(File apk, File keystore, String alias) {
+            return actions.signApk(apk, keystore, alias);
+        }
+
+        @Override
+        public String verifyApk(File apk) {
+            return actions.verifyApk(apk);
+        }
+
+        @Override
+        public String createKeystore(String fileName, String alias, String cn, String org, String country, int years) {
+            return actions.createKeystore(fileName, alias, cn, org, country, years);
+        }
+
+        @Override
+        public String importKeystore() {
+            return actions.importKeystore();
+        }
+
+        @Override
+        public String keystoreInfo(File keystore) {
+            return actions.keystoreInfo(keystore);
+        }
+
+        @Override
+        public String deleteKeystore(File keystore) {
+            return actions.deleteKeystore(keystore);
+        }
+
+        @Override
+        public String cloneRepo(String repo, String ref, String projectName, boolean useToken) {
+            return actions.cloneRepo(repo, ref, projectName, useToken);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        actions.onActivityResult(requestCode, resultCode, data);
     }
 }

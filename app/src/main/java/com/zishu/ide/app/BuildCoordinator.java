@@ -51,6 +51,8 @@ public final class BuildCoordinator {
         public volatile int progress = -1;
         public volatile boolean running = true;
         public volatile BuildResult result;
+        /** Copy of the APK in the project's visible apk/ folder, or null. */
+        public volatile java.io.File visibleApk;
         final CancelToken cancel = new CancelToken();
 
         Session(String id, ProjectInfo project, String engineName) {
@@ -161,6 +163,13 @@ public final class BuildCoordinator {
                 } catch (Throwable e) {
                     r = BuildResult.failure("Unexpected error: " + e, System.currentTimeMillis() - s.startedAt,
                             engine.id(), "debug", s.log.toString() + "\n" + android.util.Log.getStackTraceString(e), null, null);
+                }
+                if (r.success && r.apk != null) {
+                    try {
+                        s.visibleApk = history.publishApk(r.apk);
+                    } catch (java.io.IOException ignored) {
+                        // the hidden build copy still exists; the terminal then reports that path
+                    }
                 }
                 try {
                     history.record(s.id, r);

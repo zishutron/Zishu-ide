@@ -564,8 +564,9 @@ public final class MainActivity extends BaseActivity {
                 public String run() throws Exception {
                     InputStream in = DocumentIo.open(getContentResolver(), uri);
                     try {
-                        ProjectInfo info = App.projects(MainActivity.this).importZip(in, DocumentIo.displayName(getContentResolver(), uri));
-                        return "Imported \"" + info.name + "\"";
+                        ProjectManager.ImportOutcome o = App.projects(MainActivity.this)
+                                .importZipDetailed(in, DocumentIo.displayName(getContentResolver(), uri));
+                        return withNotes("Imported \"" + o.info.name + "\"", o.notes);
                     } finally {
                         com.zishu.ide.core.util.IoUtil.closeQuietly(in);
                     }
@@ -582,8 +583,8 @@ public final class MainActivity extends BaseActivity {
                     File dest = pm.uniqueDir(name.length() == 0 ? "project" : name);
                     DocumentIo.importTree(getContentResolver(), uri, dest, new DocumentIo.Limits());
                     try {
-                        ProjectInfo info = pm.registerImported(dest, dest.getName());
-                        return "Opened \"" + info.name + "\"";
+                        ProjectManager.ImportOutcome o = pm.registerImportedDetailed(dest, dest.getName());
+                        return withNotes("Opened \"" + o.info.name + "\"", o.notes);
                     } catch (IOException e) {
                         com.zishu.ide.core.util.IoUtil.deleteRecursively(dest);
                         throw e;
@@ -608,6 +609,18 @@ public final class MainActivity extends BaseActivity {
                 }
             });
         }
+    }
+
+    /** Appends what the importer arranged, so the user sees what was set up for them. */
+    private static String withNotes(String head, java.util.List<String> notes) {
+        if (notes == null || notes.isEmpty()) {
+            return head;
+        }
+        StringBuilder sb = new StringBuilder(head).append("\n");
+        for (String n : notes) {
+            sb.append("\n\u2022 ").append(n);
+        }
+        return sb.toString();
     }
 
     private interface Job {
@@ -639,6 +652,8 @@ public final class MainActivity extends BaseActivity {
                         }
                         if (ferr != null) {
                             Ui.message(MainActivity.this, pal, "That did not work", ferr);
+                        } else if (fok != null && fok.indexOf('\n') >= 0) {
+                            Ui.message(MainActivity.this, pal, "Done", fok);
                         } else {
                             toast(fok);
                         }

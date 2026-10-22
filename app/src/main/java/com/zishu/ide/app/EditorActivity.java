@@ -696,6 +696,10 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
             showImage(path);
             return;
         }
+        if (name.toLowerCase(java.util.Locale.US).endsWith(".apk")) {
+            showApk(path);
+            return;
+        }
         try {
             FileManager.TextFile tf = fm.readText(path);
             OpenFile f = new OpenFile(path);
@@ -708,6 +712,39 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
         } catch (IOException e) {
             Ui.message(this, pal, "Cannot open " + name, e.getMessage());
         }
+    }
+
+    /** An APK cannot be edited; offer what can really be done with it from inside the IDE. */
+    private void showApk(String path) {
+        final File file;
+        try {
+            file = fm.resolve(path);
+        } catch (IOException e) {
+            Ui.message(this, pal, "Cannot open APK", e.getMessage());
+            return;
+        }
+        Ui.dialog(this, pal).setTitle(file.getName())
+                .setMessage(com.zishu.ide.core.util.IoUtil.formatSize(file.length()) + "\n\nInstall it, or open the terminal "
+                        + "to save it to Downloads (zishu download " + file.getName() + "), sign it (zishu sign) or check "
+                        + "its signature (zishu verify).")
+                .setNegativeButton("Close", null)
+                .setNeutralButton("Terminal", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        Intent term = new Intent(EditorActivity.this, TerminalActivity.class);
+                        term.putExtra(TerminalActivity.EXTRA_PROJECT, project.dir.getName());
+                        startActivity(term);
+                    }
+                })
+                .setPositiveButton("Install", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        String err = ApkInstaller.install(EditorActivity.this, pal, file);
+                        if (err != null) {
+                            Ui.message(EditorActivity.this, pal, "Cannot install", err);
+                        }
+                    }
+                }).show();
     }
 
     private void showImage(String path) {

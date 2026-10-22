@@ -41,7 +41,7 @@ public final class ApkProvider extends ContentProvider {
         }
         try {
             java.util.List<String> segs = uri.getPathSegments();
-            if (segs.size() < 4) {
+            if (segs.size() < 3) {
                 throw new FileNotFoundException("Unknown path");
             }
             File f = App.workspaceDir(c);
@@ -54,7 +54,10 @@ public final class ApkProvider extends ContentProvider {
             String root = App.workspaceDir(c).getCanonicalPath() + File.separator;
             String canonical = f.getCanonicalPath();
             String marker = File.separator + ".zishu" + File.separator + "builds" + File.separator;
-            if (!canonical.startsWith(root) || !canonical.contains(marker) || !canonical.endsWith(".apk") || !f.isFile()) {
+            boolean visibleApkDir = canonical.startsWith(root)
+                    && canonical.substring(root.length()).matches("[^/\\\\]+[/\\\\]apk[/\\\\][^/\\\\]+");
+            if (!canonical.startsWith(root) || !(canonical.contains(marker) || visibleApkDir)
+                    || !canonical.endsWith(".apk") || !f.isFile()) {
                 throw new FileNotFoundException("Not a build output");
             }
             return f;

@@ -1243,6 +1243,7 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
         m.getMenu().add(0, 9, 8, "Build history");
         m.getMenu().add(0, 10, 9, "Settings");
         m.getMenu().add(0, 11, 10, "Cloud build settings");
+        m.getMenu().add(0, 12, 11, "Terminal");
         m.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(android.view.MenuItem item) {
@@ -1280,6 +1281,11 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
                         break;
                     case 11:
                         startActivity(new Intent(EditorActivity.this, CloudSettingsActivity.class));
+                        break;
+                    case 12:
+                        Intent term = new Intent(EditorActivity.this, TerminalActivity.class);
+                        term.putExtra(TerminalActivity.EXTRA_PROJECT, project.dir.getName());
+                        startActivity(term);
                         break;
                     default:
                         Intent i = new Intent(EditorActivity.this, BuildActivity.class);

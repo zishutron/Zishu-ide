@@ -226,6 +226,12 @@ public final class MainActivity extends BaseActivity {
                 pickProject(true);
             }
         }));
+        menu.addView(menuRow("Terminal", R.drawable.ic_terminal, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, TerminalActivity.class));
+            }
+        }));
         menu.addView(menuRow("Build tools", R.drawable.ic_chip, new View.OnClickListener() {
             @Override
             public void onClick(View v) {

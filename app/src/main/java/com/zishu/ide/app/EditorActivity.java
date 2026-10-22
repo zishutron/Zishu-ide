@@ -143,6 +143,14 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
                         toggleExplorer();
                     }
                 },
+                Ui.iconButton(this, pal, R.drawable.ic_terminal, "Terminal", new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        Intent term = new Intent(EditorActivity.this, TerminalActivity.class);
+                        term.putExtra(TerminalActivity.EXTRA_PROJECT, project.dir.getName());
+                        startActivity(term);
+                    }
+                }),
                 Ui.iconButton(this, pal, R.drawable.ic_save, "Save", new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
@@ -197,8 +205,10 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
         FrameLayout stack = new FrameLayout(this);
         stack.addView(root, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildExplorer(stack);
+
         setScreen(stack);
     }
+
 
     private void buildFindBar() {
         findBar = new LinearLayout(this);

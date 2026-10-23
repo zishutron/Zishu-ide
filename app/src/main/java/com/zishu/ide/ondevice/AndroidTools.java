@@ -13,6 +13,7 @@ import com.android.tools.r8.DiagnosticsHandler;
 import com.android.tools.r8.OutputMode;
 import com.zishu.ide.core.build.BuildEngine;
 import com.zishu.ide.core.build.BuildLog;
+import com.zishu.ide.core.ondevice.JavaLevels;
 import com.zishu.ide.core.ondevice.OnDeviceTools;
 import com.zishu.ide.core.ondevice.ToolException;
 import com.zishu.ide.core.util.IoUtil;
@@ -168,9 +169,9 @@ public final class AndroidTools implements OnDeviceTools {
     public void compileJava(final JavaJob job, final BuildLog log) throws ToolException {
         List<String> args = new ArrayList<String>();
         args.add("-source");
-        args.add("1.8");
+        args.add(JavaLevels.option(job.javaLevel));
         args.add("-target");
-        args.add("1.8");
+        args.add(JavaLevels.option(job.javaLevel));
         args.add("-proc:none");
         args.add("-nowarn");
         args.add("-Xemacs");
@@ -221,6 +222,9 @@ public final class AndroidTools implements OnDeviceTools {
             log.block(err.toString().trim());
         }
         if (!ok) {
+            if (JavaLevels.looksLikeLevelRejection(out.toString() + err.toString())) {
+                throw new ToolException(JavaLevels.unsupportedHint(job.javaLevel));
+            }
             throw new ToolException("Java compilation failed.");
         }
     }

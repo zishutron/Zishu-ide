@@ -31,6 +31,25 @@ final class Aapt2Runner {
     }
 
     void compileAndLink(OnDeviceTools.ResourceJob job, BuildLog log) throws ToolException {
+        List<File> libZips = new ArrayList<File>();
+        for (OnDeviceTools.ResLib lib : job.libs) {
+            if (!lib.compiledZip.isFile() || lib.compiledZip.length() == 0) {
+                File tmp = new File(lib.compiledZip.getPath() + ".tmp");
+                tmp.delete();
+                List<String> c = new ArrayList<String>();
+                c.add("compile");
+                c.add("--dir");
+                c.add(lib.resDir.getAbsolutePath());
+                c.add("-o");
+                c.add(tmp.getAbsolutePath());
+                log.line("$ aapt2 compile " + lib.name);
+                run(c, null, log);
+                if (!tmp.renameTo(lib.compiledZip)) {
+                    throw new ToolException("Cannot store the compiled resources of " + lib.name);
+                }
+            }
+            libZips.add(lib.compiledZip);
+        }
         File compiled = null;
         if (job.resDir != null) {
             compiled = new File(job.workDir, "compiled.zip");
@@ -68,9 +87,24 @@ final class Aapt2Runner {
             l.add("--rename-instrumentation-target-package");
             l.add(job.applicationId);
         }
+        for (File a : job.extraAssetsDirs) {
+            l.add("-A");
+            l.add(a.getAbsolutePath());
+        }
         if (job.assetsDir != null) {
             l.add("-A");
             l.add(job.assetsDir.getAbsolutePath());
+        }
+        if (!job.extraPackages.isEmpty()) {
+            StringBuilder pk = new StringBuilder();
+            for (String p : job.extraPackages) {
+                pk.append(pk.length() == 0 ? "" : ":").append(p);
+            }
+            l.add("--extra-packages");
+            l.add(pk.toString());
+        }
+        for (File z : libZips) {
+            l.add(z.getAbsolutePath());
         }
         if (compiled != null) {
             l.add(compiled.getAbsolutePath());

@@ -33,6 +33,16 @@ public final class GradleDeps {
     }
 
     public final List<Dep> deps = new ArrayList<Dep>();
+
+    /** Adds an implementation dependency unless the same group:artifact is already declared directly. */
+    public void addImplementation(Coordinate c) {
+        for (Dep d : deps) {
+            if (d.coordinate.ga().equals(c.ga())) {
+                return;
+            }
+        }
+        deps.add(new Dep("implementation", c));
+    }
     public final List<Coordinate> boms = new ArrayList<Coordinate>();
     /** Paths from files('libs/x.jar'). */
     public final List<String> localJars = new ArrayList<String>();

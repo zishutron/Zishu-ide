@@ -241,6 +241,7 @@ public class OnDeviceTest {
         List<File> javaSources;
         List<File> classpath;
         File lastDexOut;
+        OnDeviceTools.DexJob lastDexJob;
         final File androidJar;
         final List<String> calls = new ArrayList<String>();
         OnDeviceTools.ResourceJob lastResources;
@@ -304,6 +305,7 @@ public class OnDeviceTest {
         @Override
         public void dex(DexJob job, BuildLog log) throws ToolException {
             calls.add("d8");
+            lastDexJob = job;
             lastDexOut = job.outDir;
             if ("d8".equals(failAt)) {
                 throw new ToolException("D8 failed");

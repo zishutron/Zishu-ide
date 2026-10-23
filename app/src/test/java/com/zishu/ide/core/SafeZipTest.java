@@ -203,6 +203,21 @@ public class SafeZipTest {
     }
 
     @Test
+    public void cloudUploadSkipsTopLevelApkAndKeystoreOnly() throws Exception {
+        File p = tmp.newFolder("proj2");
+        com.zishu.ide.core.util.IoUtil.writeUtf8Atomic(new File(p, "apk/a-debug.apk"), "x");
+        com.zishu.ide.core.util.IoUtil.writeUtf8Atomic(new File(p, "keystore/my.p12"), "secret");
+        com.zishu.ide.core.util.IoUtil.writeUtf8Atomic(new File(p, "app/src/main/java/com/x/apk/Util.java"), "class Util{}");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        SafeZip.zipDirectory(p, out, SafeZip.CLOUD_EXCLUDES, 1 << 20);
+        File dest = new File(tmp.getRoot(), "round2");
+        extract(out.toByteArray(), dest);
+        assertFalse(new File(dest, "apk").exists());
+        assertFalse(new File(dest, "keystore").exists());
+        assertTrue(new File(dest, "app/src/main/java/com/x/apk/Util.java").isFile());
+    }
+
+    @Test
     public void zipDirectoryEnforcesSizeLimit() throws Exception {
         File p = tmp.newFolder("big");
         com.zishu.ide.core.util.IoUtil.writeAtomic(new File(p, "big.bin"), new byte[200000]);

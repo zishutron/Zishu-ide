@@ -239,6 +239,11 @@ public final class AndroidTools implements OnDeviceTools {
     }
 
     @Override
+    public void compileKotlin(KotlinJob job, BuildLog log) throws ToolException {
+        KotlinRunner.compile(ctx, job, androidJar(), log);
+    }
+
+    @Override
     public void dex(final DexJob job, final BuildLog log) throws ToolException {
         final List<Path> programs = new ArrayList<Path>();
         collectClasses(job.classesDir, programs);

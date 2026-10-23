@@ -55,6 +55,18 @@ public interface OnDeviceTools {
         public int javaLevel = JavaLevels.DEFAULT;
     }
 
+    /** Kotlin compilation: .kt files plus the Java files they refer to (read for symbols only; ECJ compiles those later). */
+    final class KotlinJob {
+        public List<File> sourceFiles;
+        /** android.jar first, then library jars (including kotlin-stdlib). */
+        public List<File> classpath;
+        /** The resolved kotlin-compiler-embeddable jars, converted to dex and loaded by the Android implementation. */
+        public List<File> compilerJars;
+        public File outDir;
+        public int javaLevel = JavaLevels.DEFAULT;
+        public String moduleName = "app";
+    }
+
     final class DexJob {
         public File classesDir;
         public List<File> libraryJars;
@@ -76,6 +88,9 @@ public interface OnDeviceTools {
 
     /** Compiles Java to class files in {@code outDir}. */
     void compileJava(JavaJob job, BuildLog log) throws ToolException;
+
+    /** Compiles Kotlin to class files in {@code outDir}. Experimental: the first call converts the compiler for this phone. */
+    void compileKotlin(KotlinJob job, BuildLog log) throws ToolException;
 
     /** Converts class files and library jars to one or more classes*.dex in {@code outDir}. */
     void dex(DexJob job, BuildLog log) throws ToolException;

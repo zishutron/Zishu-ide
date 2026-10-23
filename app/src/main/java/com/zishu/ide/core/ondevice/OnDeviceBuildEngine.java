@@ -149,25 +149,45 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             requireFile(rj.outApk, "aapt2 did not produce the resource package");
             cancel.throwIfCancelled();
 
-            // 2. Java
-            listener.onStage(BuildStage.BUILD, "Compiling Java");
-            listener.onProgress(35);
+            // 2. Kotlin (optional), then Java
             List<File> sources = new ArrayList<File>(plan.javaSources);
             collectJava(rj.genDir, sources);
+            List<File> classpath = new ArrayList<File>();
+            classpath.add(tools.androidJar());
+            classpath.addAll(plan.libJars);
+            if (libs != null) {
+                classpath.addAll(libs.compileJars);
+            }
+            File classesDir = new File(work, "classes");
+            classesDir.mkdirs();
+            if (!plan.kotlinSources.isEmpty()) {
+                listener.onStage(BuildStage.BUILD, "Compiling Kotlin");
+                listener.onProgress(25);
+                OnDeviceTools.KotlinJob kj = new OnDeviceTools.KotlinJob();
+                kj.compilerJars = KotlinSupport.resolveCompiler(maven, log);
+                cancel.throwIfCancelled();
+                kj.sourceFiles = new ArrayList<File>(plan.kotlinSources);
+                kj.sourceFiles.addAll(sources);
+                kj.classpath = classpath;
+                kj.outDir = classesDir;
+                kj.javaLevel = plan.javaLevel;
+                kj.moduleName = plan.manifestPackage.replace('.', '_');
+                tools.compileKotlin(kj, log);
+                cancel.throwIfCancelled();
+            }
+            listener.onStage(BuildStage.BUILD, "Compiling Java");
+            listener.onProgress(45);
             if (sources.isEmpty()) {
                 throw new ToolException("The project has no Java source files.");
             }
             OnDeviceTools.JavaJob jj = new OnDeviceTools.JavaJob();
             jj.sourceFiles = sources;
-            jj.classpath = new ArrayList<File>();
-            jj.classpath.add(tools.androidJar());
-            jj.classpath.addAll(plan.libJars);
-            if (libs != null) {
-                jj.classpath.addAll(libs.compileJars);
+            jj.classpath = new ArrayList<File>(classpath);
+            if (!plan.kotlinSources.isEmpty()) {
+                jj.classpath.add(classesDir);
             }
             jj.javaLevel = plan.javaLevel;
-            jj.outDir = new File(work, "classes");
-            jj.outDir.mkdirs();
+            jj.outDir = classesDir;
             tools.compileJava(jj, log);
             cancel.throwIfCancelled();
 
@@ -290,6 +310,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
         String manifestPackage;
         final Map<String, File> nativeLibs = new LinkedHashMap<String, File>();
         final List<File> javaSources = new ArrayList<File>();
+        final List<File> kotlinSources = new ArrayList<File>();
         final List<File> libJars = new ArrayList<File>();
 
         static Plan create(BuildRequest request, int androidJarApi, boolean mavenAvailable, BuildLog log) throws ToolException, IOException {
@@ -312,8 +333,12 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 throw new ToolException("No build.gradle was found next to src/main.");
             }
             GradleValues v = GradleValues.parse(IoUtil.readUtf8(gradle, 1024 * 1024));
-            if (v.usesKotlin || hasFileWithSuffix(new File(main, "java"), ".kt") || hasFileWithSuffix(new File(main, "kotlin"), ".kt")) {
-                throw new ToolException("Kotlin is not supported by the on-device build yet. Use the cloud build for Kotlin projects.");
+            List<File> kotlinFiles = new ArrayList<File>();
+            collectWithSuffix(new File(main, "java"), ".kt", kotlinFiles);
+            collectWithSuffix(new File(main, "kotlin"), ".kt", kotlinFiles);
+            if (!kotlinFiles.isEmpty() && !mavenAvailable) {
+                throw new ToolException("Kotlin projects need the library downloader for the Kotlin compiler, which is not available here. "
+                        + "Use the cloud build for Kotlin projects.");
             }
             String gradleText = IoUtil.readUtf8(gradle, 1024 * 1024);
             File catalogFile = new File(root, "gradle/libs.versions.toml");
@@ -335,6 +360,12 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 throw new ToolException("Could not find a valid package name (namespace) in build.gradle.");
             }
             Plan p = new Plan();
+            p.kotlinSources.addAll(kotlinFiles);
+            if (!kotlinFiles.isEmpty()) {
+                gd.addImplementation(KotlinSupport.stdlib());
+                log.line("Kotlin: " + kotlinFiles.size() + " file(s), compiled with Kotlin " + KotlinSupport.VERSION
+                        + " (experimental on-phone compiler)");
+            }
             p.gradleDeps = gd;
             p.moduleDir = module;
             p.manifestPackage = pkg;
@@ -437,17 +468,19 @@ public final class OnDeviceBuildEngine implements BuildEngine {
         }
     }
 
-    private static boolean hasFileWithSuffix(File dir, String suffix) {
+    private static void collectWithSuffix(File dir, String suffix, List<File> out) {
         File[] files = dir.listFiles();
         if (files == null) {
-            return false;
+            return;
         }
+        java.util.Arrays.sort(files);
         for (File f : files) {
-            if (f.isDirectory() ? hasFileWithSuffix(f, suffix) : f.getName().endsWith(suffix)) {
-                return true;
+            if (f.isDirectory()) {
+                collectWithSuffix(f, suffix, out);
+            } else if (f.getName().endsWith(suffix)) {
+                out.add(f);
             }
         }
-        return false;
     }
 
     private static void requireFile(File f, String message) throws ToolException {

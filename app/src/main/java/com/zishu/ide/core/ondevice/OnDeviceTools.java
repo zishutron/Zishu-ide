@@ -12,6 +12,19 @@ import java.util.List;
  */
 public interface OnDeviceTools {
 
+    /** Resources of one library (AAR): compiled once into {@code compiledZip}, which is reused by later builds. */
+    final class ResLib {
+        public final String name;
+        public final File resDir;
+        public final File compiledZip;
+
+        public ResLib(String name, File resDir, File compiledZip) {
+            this.name = name;
+            this.resDir = resDir;
+            this.compiledZip = compiledZip;
+        }
+    }
+
     /** Input of the resource step. {@code resDir} and {@code assetsDir} may be null when the project has none. */
     final class ResourceJob {
         public File manifest;
@@ -27,12 +40,19 @@ public interface OnDeviceTools {
         public String versionName;
         /** Final package id of the installed app (applicationId); R.java stays in the manifest package. */
         public String applicationId;
+        /** Library resources in dependency order (a library's own dependencies first); the app's resources override them. */
+        public List<ResLib> libs = new java.util.ArrayList<ResLib>();
+        public List<File> extraAssetsDirs = new java.util.ArrayList<File>();
+        /** Library packages that need their own R class (generated with aapt2 --extra-packages). */
+        public List<String> extraPackages = new java.util.ArrayList<String>();
     }
 
     final class JavaJob {
         public List<File> sourceFiles;
         public List<File> classpath;
         public File outDir;
+        /** Java language level (5..21) used for -source and -target. */
+        public int javaLevel = JavaLevels.DEFAULT;
     }
 
     final class DexJob {

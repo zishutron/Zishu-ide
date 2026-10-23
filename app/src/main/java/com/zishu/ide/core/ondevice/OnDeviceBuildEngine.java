@@ -9,6 +9,9 @@ import com.zishu.ide.core.build.BuildRequest;
 import com.zishu.ide.core.build.BuildResult;
 import com.zishu.ide.core.build.BuildStage;
 import com.zishu.ide.core.build.CancelToken;
+import com.zishu.ide.core.maven.GradleDeps;
+import com.zishu.ide.core.maven.MavenDependencies;
+import com.zishu.ide.core.maven.VersionCatalog;
 import com.zishu.ide.core.util.IoUtil;
 
 import java.io.File;
@@ -30,10 +33,17 @@ public final class OnDeviceBuildEngine implements BuildEngine {
 
     private final OnDeviceTools tools;
     private final File workRoot;
+    private final MavenDependencies maven;
 
     public OnDeviceBuildEngine(OnDeviceTools tools, File workRoot) {
+        this(tools, workRoot, null);
+    }
+
+    /** @param maven where libraries come from; null means Maven dependencies are refused */
+    public OnDeviceBuildEngine(OnDeviceTools tools, File workRoot, MavenDependencies maven) {
         this.tools = tools;
         this.workRoot = workRoot;
+        this.maven = maven;
     }
 
     @Override
@@ -67,7 +77,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
 
             listener.onStage(BuildStage.VALIDATE, "Checking project");
             listener.onProgress(3);
-            Plan plan = Plan.create(request, tools.androidJarApi(), log);
+            Plan plan = Plan.create(request, tools.androidJarApi(), maven != null, log);
             cancel.throwIfCancelled();
 
             if (work.exists()) {
@@ -77,11 +87,44 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 throw new IOException("Cannot create the work folder " + work);
             }
 
+            // 0. Libraries
+            LibraryPlan libs = null;
+            if (!plan.gradleDeps.deps.isEmpty() || !plan.gradleDeps.localJars.isEmpty()) {
+                listener.onStage(BuildStage.BUILD, "Resolving libraries");
+                listener.onProgress(6);
+                if (maven != null) {
+                    final BuildLog dl = log;
+                    maven.cache().setListener(new com.zishu.ide.core.maven.MavenCache.Listener() {
+                        @Override
+                        public void downloading(String path) {
+                            dl.line("Downloading " + path.substring(path.lastIndexOf('/') + 1));
+                        }
+                    });
+                }
+                if (!plan.gradleDeps.deps.isEmpty()) {
+                    libs = LibraryPlan.build(plan.gradleDeps, maven, plan.moduleDir, plan.manifestPackage, log);
+                } else {
+                    libs = LibraryPlan.build(plan.gradleDeps, null, plan.moduleDir, plan.manifestPackage, log);
+                }
+                for (String n : libs.notes) {
+                    log.line("NOTE: " + n);
+                }
+                cancel.throwIfCancelled();
+            }
+
             // 1. Manifest + resources
             listener.onStage(BuildStage.BUILD, "Compiling resources (aapt2)");
             listener.onProgress(10);
             File manifest = new File(work, "AndroidManifest.xml");
-            IoUtil.writeUtf8Atomic(manifest, plan.patchedManifest);
+            String manifestText = plan.patchedManifest;
+            if (libs != null && !libs.manifests.isEmpty()) {
+                List<String> mergeNotes = new ArrayList<String>();
+                manifestText = ManifestMerger.merge(manifestText, libs.manifests, plan.applicationId, plan.minSdk, mergeNotes);
+                for (String n : mergeNotes) {
+                    log.line(n);
+                }
+            }
+            IoUtil.writeUtf8Atomic(manifest, manifestText);
             OnDeviceTools.ResourceJob rj = new OnDeviceTools.ResourceJob();
             rj.manifest = manifest;
             rj.resDir = plan.resDir;
@@ -95,6 +138,11 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             rj.versionCode = plan.versionCode;
             rj.versionName = plan.versionName;
             rj.applicationId = plan.applicationId;
+            if (libs != null) {
+                rj.libs.addAll(libs.resLibs);
+                rj.extraAssetsDirs.addAll(libs.assetDirs);
+                rj.extraPackages.addAll(libs.extraPackages);
+            }
             rj.genDir.mkdirs();
             rj.workDir.mkdirs();
             tools.compileResources(rj, log);
@@ -114,6 +162,10 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             jj.classpath = new ArrayList<File>();
             jj.classpath.add(tools.androidJar());
             jj.classpath.addAll(plan.libJars);
+            if (libs != null) {
+                jj.classpath.addAll(libs.compileJars);
+            }
+            jj.javaLevel = plan.javaLevel;
             jj.outDir = new File(work, "classes");
             jj.outDir.mkdirs();
             tools.compileJava(jj, log);
@@ -124,7 +176,10 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             listener.onProgress(60);
             OnDeviceTools.DexJob dj = new OnDeviceTools.DexJob();
             dj.classesDir = jj.outDir;
-            dj.libraryJars = plan.libJars;
+            dj.libraryJars = new ArrayList<File>(plan.libJars);
+            if (libs != null) {
+                dj.libraryJars.addAll(libs.dexJars);
+            }
             dj.androidJar = tools.androidJar();
             dj.minSdk = plan.minSdk;
             dj.outDir = new File(work, "dex");
@@ -149,7 +204,12 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             listener.onStage(BuildStage.BUILD, "Packaging");
             listener.onProgress(75);
             File unsigned = new File(work, "unsigned.apk");
-            ApkPackager.assemble(rj.outApk, dexFiles, unsigned);
+            Map<String, File> extras = new LinkedHashMap<String, File>(dexFiles);
+            extras.putAll(plan.nativeLibs);
+            if (libs != null) {
+                extras.putAll(libs.nativeLibs);
+            }
+            ApkPackager.assemble(rj.outApk, extras, unsigned);
             cancel.throwIfCancelled();
 
             // 5. Sign
@@ -224,10 +284,15 @@ public final class OnDeviceBuildEngine implements BuildEngine {
         int versionCode;
         String versionName;
         String apkBaseName;
+        int javaLevel = JavaLevels.DEFAULT;
+        GradleDeps gradleDeps = new GradleDeps();
+        File moduleDir;
+        String manifestPackage;
+        final Map<String, File> nativeLibs = new LinkedHashMap<String, File>();
         final List<File> javaSources = new ArrayList<File>();
         final List<File> libJars = new ArrayList<File>();
 
-        static Plan create(BuildRequest request, int androidJarApi, BuildLog log) throws ToolException, IOException {
+        static Plan create(BuildRequest request, int androidJarApi, boolean mavenAvailable, BuildLog log) throws ToolException, IOException {
             File root = request.project.dir;
             File module = new File(root, "app");
             if (!new File(module, "src/main/AndroidManifest.xml").isFile()) {
@@ -250,9 +315,18 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             if (v.usesKotlin || hasFileWithSuffix(new File(main, "java"), ".kt") || hasFileWithSuffix(new File(main, "kotlin"), ".kt")) {
                 throw new ToolException("Kotlin is not supported by the on-device build yet. Use the cloud build for Kotlin projects.");
             }
-            if (!v.unsupportedDependencies.isEmpty()) {
+            String gradleText = IoUtil.readUtf8(gradle, 1024 * 1024);
+            File catalogFile = new File(root, "gradle/libs.versions.toml");
+            VersionCatalog catalog = catalogFile.isFile() ? VersionCatalog.parse(IoUtil.readUtf8(catalogFile, 1024 * 1024)) : null;
+            GradleDeps gd = GradleDeps.parse(gradleText, catalog);
+            if (!gd.unsupported.isEmpty()) {
+                throw new ToolException("The on-device build cannot use this dependency: " + gd.unsupported.get(0)
+                        + ". Use the cloud build for it.");
+            }
+            if (!gd.deps.isEmpty() && !mavenAvailable) {
                 throw new ToolException("The on-device build cannot download libraries. Unsupported dependency: "
-                        + v.unsupportedDependencies.get(0) + ". Use the cloud build, or put the .jar in app/libs.");
+                        + gd.deps.get(0).configuration + " " + gd.deps.get(0).coordinate
+                        + ". Use the cloud build, or put the .jar in app/libs.");
             }
             String manifestXml = IoUtil.readUtf8(manifestFile, 2 * 1024 * 1024);
             String declared = ManifestPatcher.declaredPackage(manifestXml);
@@ -261,6 +335,9 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 throw new ToolException("Could not find a valid package name (namespace) in build.gradle.");
             }
             Plan p = new Plan();
+            p.gradleDeps = gd;
+            p.moduleDir = module;
+            p.manifestPackage = pkg;
             try {
                 p.patchedManifest = ManifestPatcher.ensurePackage(manifestXml, pkg);
             } catch (IllegalArgumentException e) {
@@ -287,9 +364,35 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                     }
                 }
             }
-            if (new File(main, "jniLibs").isDirectory()) {
-                log.line("WARNING: src/main/jniLibs is ignored by the on-device build.");
+            File jni = new File(main, "jniLibs");
+            File[] abiDirs = jni.listFiles();
+            if (abiDirs != null) {
+                java.util.Arrays.sort(abiDirs);
+                for (File abi : abiDirs) {
+                    File[] so = abi.listFiles();
+                    if (!abi.isDirectory() || so == null) {
+                        continue;
+                    }
+                    if (!LibraryPlan.ABIS.contains(abi.getName())) {
+                        log.line("NOTE: jniLibs/" + abi.getName() + " is not packaged (only arm64-v8a and armeabi-v7a are).");
+                        continue;
+                    }
+                    java.util.Arrays.sort(so);
+                    for (File f : so) {
+                        if (f.isFile() && f.getName().endsWith(".so")) {
+                            p.nativeLibs.put("lib/" + abi.getName() + "/" + f.getName(), f);
+                        }
+                    }
+                }
             }
+            if (v.javaLevel != 0) {
+                if (v.javaLevel < JavaLevels.MIN || v.javaLevel > JavaLevels.MAX) {
+                    throw new ToolException("Java " + v.javaLevel + " is outside the supported range "
+                            + JavaLevels.MIN + " to " + JavaLevels.MAX + ".");
+                }
+                p.javaLevel = v.javaLevel;
+            }
+            log.line("Java language level: " + p.javaLevel + (v.javaLevel == 0 ? " (default, build.gradle sets none)" : ""));
             if (v.compileSdk > androidJarApi) {
                 log.line("WARNING: the project sets compileSdk " + v.compileSdk + " but this phone builds against API "
                         + androidJarApi + ". APIs added after " + androidJarApi + " will not compile.");

@@ -515,8 +515,14 @@ public final class TerminalState implements BuildCoordinator.Observer, ShellSess
         if (r.success && r.apk != null) {
             println(IdeCommands.Level.OK, "BUILD SUCCESSFUL  " + IoUtil.formatSize(r.apkInfo.sizeBytes) + " in "
                     + (r.durationMs / 1000) + "s");
-            println(IdeCommands.Level.OK, r.apk.getPath());
-            println(IdeCommands.Level.DIM, "Run  zishu install  to install it.");
+            File shown = r.apk;
+            BuildCoordinator.Session cs = BuildCoordinator.get().session();
+            if (cs != null && cs.visibleApk != null && cs.visibleApk.isFile()) {
+                shown = cs.visibleApk;
+            }
+            println(IdeCommands.Level.OK, shown.getPath());
+            println(IdeCommands.Level.DIM, "Run  zishu install  to install it,  zishu download  to save it to Downloads,"
+                    + "  zishu sign  to sign it with your own key.");
         } else if (r.cancelled) {
             println(IdeCommands.Level.WARN, "Build cancelled.");
         } else {
@@ -536,7 +542,7 @@ public final class TerminalState implements BuildCoordinator.Observer, ShellSess
         BuildCoordinator.Session s = BuildCoordinator.get().session();
         if (s != null && s.result != null && s.result.success && s.result.apk != null && s.result.apk.isFile()
                 && project != null && s.project.dir.equals(project.dir)) {
-            return s.result.apk;
+            return s.visibleApk != null && s.visibleApk.isFile() ? s.visibleApk : s.result.apk;
         }
         if (project != null) {
             com.zishu.ide.core.build.BuildHistory h = new com.zishu.ide.core.build.BuildHistory(project.dir);
@@ -544,7 +550,7 @@ public final class TerminalState implements BuildCoordinator.Observer, ShellSess
                 if (e.success) {
                     File f = h.apkFile(e);
                     if (f != null && f.isFile()) {
-                        return f;
+                        return h.preferVisible(f);
                     }
                 }
             }

@@ -15,3 +15,15 @@
 - Kotlin projects need the Kotlin Gradle plugin from Maven/Google in the cloud runner; plugin versions are
   checked against known-compatible ranges only.
 - WebView projects: HTTPS is the default; cleartext HTTP is enabled only if the user enters an http:// URL (the wizard warns). No JavaScript bridge is exposed; file access is disabled except bundled assets.
+
+## On-phone build (new, unverified on a device)
+
+See docs/ONDEVICE.md. It supports simple Java projects only, needs Android 8+ and an arm64 phone, and its native parts
+have not been run by the author yet; run the self-test in Build tools. Kotlin and dependency-based projects still need the cloud build.
+
+## Import, clone and signing
+
+- Generated Gradle files come from the manifest only. Dependencies from Maven are not guessed; add them to `app/build.gradle`.
+- Clone downloads a ZIP of the default branch (or `--branch`); there is no git history and no push. Private repositories need `--auth` and a token that can read them.
+- Repositories with several apps import one app (the one with a launcher activity) and list the others.
+- The JKS reader and the signing code were verified with keytool-made keystores in unit tests; signing/verification with apksig and the dialogs are verified only by the CI build and on a phone.

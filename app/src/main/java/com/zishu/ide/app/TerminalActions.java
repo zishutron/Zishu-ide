@@ -474,9 +474,10 @@ final class TerminalActions {
             @Override
             public void run() {
                 File zip = new File(app.getCacheDir(), "clone-" + System.nanoTime() + ".zip");
-                final ProjectManager pm = App.projects(app);
-                File tmp = new File(pm.getRoot(), ".import-" + System.nanoTime());
+                File tmp = null;
                 try {
+                    final ProjectManager pm = App.projects(app);
+                    tmp = new File(pm.getRoot(), ".import-" + System.nanoTime());
                     final long[] last = {0};
                     GitHubDownloader.download(repo, token, zip, new GitHubDownloader.Progress() {
                         @Override
@@ -512,7 +513,9 @@ final class TerminalActions {
                 } finally {
                     zip.delete();
                     try {
-                        IoUtil.deleteRecursively(tmp);
+                        if (tmp != null) {
+                            IoUtil.deleteRecursively(tmp);
+                        }
                     } catch (IOException ignored) {
                         // hidden temp folder
                     }

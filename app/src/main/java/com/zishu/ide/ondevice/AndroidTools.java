@@ -167,6 +167,9 @@ public final class AndroidTools implements OnDeviceTools {
 
     @Override
     public void compileJava(final JavaJob job, final BuildLog log) throws ToolException {
+        if (!JavaLevels.compilerAccepts(job.javaLevel)) {
+            throw new ToolException(JavaLevels.unsupportedHint(job.javaLevel));
+        }
         List<String> args = new ArrayList<String>();
         args.add("-source");
         args.add(JavaLevels.option(job.javaLevel));
@@ -177,16 +180,22 @@ public final class AndroidTools implements OnDeviceTools {
         args.add("-Xemacs");
         args.add("-encoding");
         args.add("UTF-8");
-        args.add("-bootclasspath");
-        args.add(job.classpath.get(0).getAbsolutePath());
-        if (job.classpath.size() > 1) {
-            StringBuilder cp = new StringBuilder();
-            for (int i = 1; i < job.classpath.size(); i++) {
-                if (cp.length() > 0) {
-                    cp.append(File.pathSeparator);
-                }
-                cp.append(job.classpath.get(i).getAbsolutePath());
+        StringBuilder cp = new StringBuilder();
+        if (JavaLevels.usesBootclasspath(job.javaLevel)) {
+            args.add("-bootclasspath");
+            args.add(job.classpath.get(0).getAbsolutePath());
+        } else {
+            // ECJ: "option -bootclasspath not supported at compliance level 9 and above"
+            cp.append(job.classpath.get(0).getAbsolutePath());
+            log.line("Java " + job.javaLevel + ": android.jar is passed on the classpath (ECJ has no -bootclasspath here).");
+        }
+        for (int i = 1; i < job.classpath.size(); i++) {
+            if (cp.length() > 0) {
+                cp.append(File.pathSeparator);
             }
+            cp.append(job.classpath.get(i).getAbsolutePath());
+        }
+        if (cp.length() > 0) {
             args.add("-classpath");
             args.add(cp.toString());
         }

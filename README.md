@@ -74,8 +74,3 @@ Copyright (c) 2026 zishutron. **All rights reserved.** This is proprietary softw
 redistribute or present it as your own work without written permission. See [LICENSE](LICENSE).
 Third-party components keep their own licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 Apps you create with Zishu IDE belong to you.
-
-## Download 
-
-To use the latest version of Zishu Terminal, download it from the release on GitHub. 
-https://github.com/zishutron/zishu-terminal/releases/download/v6.0.0/zishu.terminal_v6.0.0.apk

@@ -198,7 +198,7 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
         final boolean onDevice = com.zishu.ide.core.ondevice.OnDeviceBuildEngine.ID.equals(engine.id());
         if (st.available && onDevice) {
             engineBox.addView(Ui.banner(this, pal, R.drawable.ic_phone, pal.primary, "Build on this phone",
-                    st.reason + " Java projects, with libraries (AndroidX etc.) downloaded once from Google/Maven Central; no Kotlin yet."));
+                    st.reason + " Java projects, with libraries (AndroidX etc.) downloaded once from Google/Maven Central. Kotlin is experimental: the first Kotlin build downloads the compiler and converts it for this phone, which can take several minutes."));
         } else if (st.available) {
             engineBox.addView(Ui.banner(this, pal, R.drawable.ic_cloud, pal.primary, "GitHub Actions cloud build",
                     st.reason + " The project's source is uploaded to that repository for the build."));

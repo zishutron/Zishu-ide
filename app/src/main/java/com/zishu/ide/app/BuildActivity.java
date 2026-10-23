@@ -62,6 +62,7 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
 
     private File pendingSave;
     private BuildResult shownResult;
+    private BuildCoordinator.Session shownSession;
     private boolean refreshQueued;
 
     @Override
@@ -293,7 +294,12 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
             }
         }
 
-        // result
+        // result: a new build must never keep showing the previous build's result card
+        if (s != shownSession) {
+            shownSession = s;
+            shownResult = null;
+            resultBox.removeAllViews();
+        }
         BuildResult r = s == null ? null : s.result;
         if (r != shownResult) {
             shownResult = r;
@@ -318,6 +324,7 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
             toast("A build is already running.");
         }
         shownResult = null;
+        resultBox.removeAllViews();
         refresh();
     }
 

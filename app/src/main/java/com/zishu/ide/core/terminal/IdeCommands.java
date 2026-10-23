@@ -81,6 +81,31 @@ public final class IdeCommands {
         void runSelfTest();
 
         void clearScreen();
+
+        /** Saves an APK to the phone's Downloads folder (or asks where to save it). @return an error text, or null */
+        String downloadApk(File apk);
+
+        /** Starts signing (asks for the password in a masked dialog; reports progress itself). @return an error text, or null when started */
+        String signApk(File apk, File keystore, String alias);
+
+        /** Checks an APK's signature and reports the result itself. @return an error text, or null when started */
+        String verifyApk(File apk);
+
+        /** Asks for a password and creates a PKCS12 keystore in the project's keystore folder. @return an error text, or null when started */
+        String createKeystore(String fileName, String alias, String commonName, String organisation, String country,
+                              int validYears);
+
+        /** Opens the system file picker to copy a keystore into the project. @return an error text, or null when opened */
+        String importKeystore();
+
+        /** Asks for the password and reports the keystore's keys and certificate. @return an error text, or null when started */
+        String keystoreInfo(File keystore);
+
+        /** Asks for confirmation, then deletes. @return an error text, or null when the question was shown */
+        String deleteKeystore(File keystore);
+
+        /** Downloads a GitHub repository and sets it up as a new project; reports progress itself. @return an error text, or null when started */
+        String cloneRepo(String repo, String ref, String projectName, boolean useToken);
     }
 
     private static final Pattern OWNER_REPO = Pattern.compile("[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}");
@@ -100,7 +125,8 @@ public final class IdeCommands {
 
     public static String[] subcommands() {
         return new String[]{"help", "projects", "open", "status", "engine", "build", "cancel", "log", "apk", "install",
-                "history", "cloud", "selftest", "editor", "clear", "version"};
+                "history", "cloud", "selftest", "editor", "clear", "version", "clone", "download", "apks", "sign", "verify",
+                "keystore"};
     }
 
     public void run(List<String> words, Out out) {
@@ -144,6 +170,18 @@ public final class IdeCommands {
             install(out);
         } else if ("history".equals(sub)) {
             history(out);
+        } else if ("apks".equals(sub)) {
+            apks(out);
+        } else if ("download".equals(sub)) {
+            download(args, out);
+        } else if ("sign".equals(sub)) {
+            sign(args, out);
+        } else if ("verify".equals(sub)) {
+            verify(args, out);
+        } else if ("keystore".equals(sub)) {
+            keystore(args, out);
+        } else if ("clone".equals(sub)) {
+            clone(args, out);
         } else if ("cloud".equals(sub)) {
             cloud(args, out);
         } else if ("selftest".equals(sub)) {
@@ -186,6 +224,12 @@ public final class IdeCommands {
                 {"zishu log [lines]", "show the end of the last build log"},
                 {"zishu apk", "where the last APK is"},
                 {"zishu install", "open the installer for the last APK"},
+                {"zishu apks", "list the APKs in this project's apk/ folder"},
+                {"zishu download [apk]", "save an APK to your Downloads folder"},
+                {"zishu keystore ...", "create/import/list signing keys (zishu help keystore)"},
+                {"zishu sign [apk] [--keystore f]", "sign an APK with your own key (zishu help sign)"},
+                {"zishu verify [apk]", "check an APK's signature"},
+                {"zishu clone <github repo>", "download a GitHub repo as a new project"},
                 {"zishu history", "recent builds of this project"},
                 {"zishu engine [auto|device|cloud]", "show or choose the build engine"},
                 {"zishu cloud ...", "cloud build settings (zishu help cloud)"},
@@ -208,6 +252,29 @@ public final class IdeCommands {
                     + "zishu cloud public on|off        allow a public build repository (not recommended)\n"
                     + "zishu cloud settings             open the screen where you enter the access token\n"
                     + "The token is never typed here, so it cannot end up in the terminal history.";
+        }
+        if ("keystore".equals(t)) {
+            return "zishu keystore list                          keystores in this project's keystore/ folder\n"
+                    + "zishu keystore create <name> [--alias a] [--cn \"Your Name\"] [--org O] [--country IN] [--years 30]\n"
+                    + "                                            make a new PKCS12 keystore (asks for a password)\n"
+                    + "zishu keystore import                       copy a .p12/.pfx/.jks/.keystore file into the project\n"
+                    + "zishu keystore info <name>                  show its keys and certificate (asks for the password)\n"
+                    + "zishu keystore delete <name>                delete it (asks to confirm)\n"
+                    + "You can also put an existing keystore file into the project's keystore/ folder yourself.\n"
+                    + "Passwords are asked in a masked dialog. They are never typed here, saved, or uploaded, and\n"
+                    + "keystore/ is never sent to a cloud build. Back the file up: a lost key cannot be recovered.";
+        }
+        if ("sign".equals(t)) {
+            return "zishu sign                                  sign the newest APK in apk/ with the only keystore\n"
+                    + "zishu sign <apk> --keystore <file> --alias <alias>\n"
+                    + "The result is saved next to the original as <name>-signed.apk and is checked with the\n"
+                    + "Android APK verifier before it is reported as signed.";
+        }
+        if ("clone".equals(t)) {
+            return "zishu clone <owner/repo | https://github.com/owner/repo> [--branch b] [--name projectName] [--auth]\n"
+                    + "Downloads the repository as a ZIP, finds the Android app inside and lays out the project\n"
+                    + "(Gradle files are created if the repository has none). Private repositories need --auth,\n"
+                    + "which uses the token saved in cloud settings.";
         }
         if ("build".equals(t)) {
             return "zishu build               use the saved engine (zishu engine)\n"
@@ -436,6 +503,272 @@ public final class IdeCommands {
             out.line(Level.WARN, "For safety the token is not accepted here. Use  zishu cloud settings.");
         } else {
             out.line(Level.ERROR, "Unknown cloud command: " + sub + "   (zishu help cloud)");
+        }
+    }
+
+    // ------------------------------------------------------------------ apk files, signing, clone
+
+    /** Removes "--name value" from args and returns the value, or null. */
+    private static String takeOption(List<String> args, String name) {
+        int i = args.indexOf(name);
+        if (i < 0 || i + 1 >= args.size()) {
+            return null;
+        }
+        String v = args.get(i + 1);
+        args.remove(i + 1);
+        args.remove(i);
+        return v;
+    }
+
+    private static boolean takeFlag(List<String> args, String name) {
+        return args.remove(name);
+    }
+
+    private File projectDir() {
+        ProjectInfo p = host.currentProject();
+        return p == null ? null : p.dir;
+    }
+
+    private List<File> apkList() {
+        File dir = projectDir();
+        List<File> out = new ArrayList<File>();
+        if (dir == null) {
+            return out;
+        }
+        File[] kids = new File(dir, BuildHistory.VISIBLE_APK_DIR).listFiles();
+        if (kids != null) {
+            for (File f : kids) {
+                if (f.isFile() && f.getName().toLowerCase(Locale.US).endsWith(".apk")) {
+                    out.add(f);
+                }
+            }
+        }
+        java.util.Collections.sort(out, new java.util.Comparator<File>() {
+            @Override
+            public int compare(File a, File b) {
+                return a.lastModified() == b.lastModified() ? a.getName().compareTo(b.getName())
+                        : (a.lastModified() > b.lastModified() ? -1 : 1);
+            }
+        });
+        return out;
+    }
+
+    /** An APK argument: a path, a path inside the project, or a file name in apk/. Null argument means the newest APK. */
+    private File resolveApk(String arg, Out out) {
+        File dir = projectDir();
+        if (arg == null) {
+            List<File> list = apkList();
+            File f = list.isEmpty() ? host.lastApk() : list.get(0);
+            if (f == null || !f.isFile()) {
+                out.line(Level.WARN, "There is no APK yet. Run  zishu build  first, or give the path of an APK.");
+                return null;
+            }
+            return f;
+        }
+        File[] tries = new File[]{new File(arg), dir == null ? null : new File(dir, arg),
+                dir == null ? null : new File(new File(dir, BuildHistory.VISIBLE_APK_DIR), arg)};
+        for (File t : tries) {
+            if (t != null && t.isFile() && t.getName().toLowerCase(Locale.US).endsWith(".apk")) {
+                return t;
+            }
+        }
+        out.line(Level.ERROR, "No APK found for \"" + arg + "\". Use  zishu apks  to list the APKs of this project.");
+        return null;
+    }
+
+    private void apks(Out out) {
+        if (host.currentProject() == null) {
+            noProject(out);
+            return;
+        }
+        List<File> list = apkList();
+        if (list.isEmpty()) {
+            out.line(Level.WARN, "The apk/ folder of this project has no APK yet. Run  zishu build.");
+            return;
+        }
+        out.line(Level.DIM, new File(projectDir(), BuildHistory.VISIBLE_APK_DIR).getPath());
+        SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US);
+        for (File a : list) {
+            out.line(Level.PLAIN, pad(a.getName(), 34) + pad(IoUtil.formatSize(a.length()), 10) + f.format(new Date(a.lastModified())));
+        }
+    }
+
+    private void download(List<String> args, Out out) {
+        File apk = resolveApk(args.isEmpty() ? null : args.get(0), out);
+        if (apk == null) {
+            return;
+        }
+        String err = host.downloadApk(apk);
+        if (err != null) {
+            out.line(Level.ERROR, err);
+        }
+    }
+
+    private void verify(List<String> args, Out out) {
+        File apk = resolveApk(args.isEmpty() ? null : args.get(0), out);
+        if (apk == null) {
+            return;
+        }
+        String err = host.verifyApk(apk);
+        if (err != null) {
+            out.line(Level.ERROR, err);
+        }
+    }
+
+    /** The keystore named by the argument, or the only one in the project. Prints why when there is none. */
+    private File resolveKeystore(String arg, Out out) {
+        File dir = projectDir();
+        if (dir == null) {
+            noProject(out);
+            return null;
+        }
+        List<File> all = com.zishu.ide.core.signing.KeyStores.list(dir);
+        if (arg != null) {
+            File f = new File(com.zishu.ide.core.signing.KeyStores.dir(dir), arg);
+            if (f.isFile()) {
+                return f;
+            }
+            File abs = new File(arg);
+            if (abs.isFile()) {
+                return abs;
+            }
+            out.line(Level.ERROR, "No keystore named \"" + arg + "\" in the keystore/ folder.");
+            return null;
+        }
+        if (all.isEmpty()) {
+            out.line(Level.WARN, "This project has no keystore yet. Make one with  zishu keystore create <name>  or copy "
+                    + "yours in with  zishu keystore import.");
+            return null;
+        }
+        if (all.size() > 1) {
+            out.line(Level.WARN, "There is more than one keystore. Pick one with  --keystore <file>:");
+            for (File f : all) {
+                out.line(Level.PLAIN, "  " + f.getName());
+            }
+            return null;
+        }
+        return all.get(0);
+    }
+
+    private void sign(List<String> args, Out out) {
+        if (host.currentProject() == null) {
+            noProject(out);
+            return;
+        }
+        List<String> a = new ArrayList<String>(args);
+        String ks = takeOption(a, "--keystore");
+        String alias = takeOption(a, "--alias");
+        File apk = resolveApk(a.isEmpty() ? null : a.get(0), out);
+        if (apk == null) {
+            return;
+        }
+        File keystore = resolveKeystore(ks, out);
+        if (keystore == null) {
+            return;
+        }
+        String err = host.signApk(apk, keystore, alias);
+        if (err != null) {
+            out.line(Level.ERROR, err);
+        }
+    }
+
+    private void keystore(List<String> args, Out out) {
+        if (host.currentProject() == null) {
+            noProject(out);
+            return;
+        }
+        String sub = args.isEmpty() ? "list" : args.get(0);
+        List<String> a = new ArrayList<String>(args.isEmpty() ? args : args.subList(1, args.size()));
+        if ("list".equals(sub)) {
+            List<File> all = com.zishu.ide.core.signing.KeyStores.list(projectDir());
+            if (all.isEmpty()) {
+                out.line(Level.WARN, "No keystores in this project. Use  zishu keystore create <name>  or  zishu keystore import.");
+                out.line(Level.DIM, "Folder: " + com.zishu.ide.core.signing.KeyStores.dir(projectDir()).getPath());
+                return;
+            }
+            out.line(Level.DIM, com.zishu.ide.core.signing.KeyStores.dir(projectDir()).getPath());
+            for (File f : all) {
+                out.line(Level.PLAIN, pad(f.getName(), 30) + IoUtil.formatSize(f.length()));
+            }
+        } else if ("create".equals(sub)) {
+            String alias = takeOption(a, "--alias");
+            String cn = takeOption(a, "--cn");
+            String org = takeOption(a, "--org");
+            String country = takeOption(a, "--country");
+            String yearsText = takeOption(a, "--years");
+            int years = 30;
+            if (yearsText != null) {
+                try {
+                    years = Integer.parseInt(yearsText);
+                } catch (NumberFormatException e) {
+                    out.line(Level.ERROR, "--years must be a number between 1 and 100.");
+                    return;
+                }
+            }
+            if (years < 1 || years > 100) {
+                out.line(Level.ERROR, "--years must be a number between 1 and 100.");
+                return;
+            }
+            if (a.isEmpty()) {
+                out.line(Level.ERROR, "Usage: zishu keystore create <name> [--alias a] [--cn \"Your Name\"] [--org O] "
+                        + "[--country IN] [--years 30]");
+                return;
+            }
+            String file = com.zishu.ide.core.signing.KeyStores.fileName(a.get(0));
+            if (new File(com.zishu.ide.core.signing.KeyStores.dir(projectDir()), file).exists()) {
+                out.line(Level.ERROR, file + " already exists. Choose another name; existing keys are never overwritten.");
+                return;
+            }
+            if (alias == null) {
+                alias = "key0";
+            }
+            if (!alias.matches("[A-Za-z0-9._-]{1,64}")) {
+                out.line(Level.ERROR, "The alias may use letters, digits, dot, dash and underscore only.");
+                return;
+            }
+            String err = host.createKeystore(file, alias, cn == null ? alias : cn, org, country, years);
+            if (err != null) {
+                out.line(Level.ERROR, err);
+            }
+        } else if ("import".equals(sub)) {
+            String err = host.importKeystore();
+            if (err != null) {
+                out.line(Level.ERROR, err);
+            }
+        } else if ("info".equals(sub) || "delete".equals(sub)) {
+            File f = resolveKeystore(a.isEmpty() ? null : a.get(0), out);
+            if (f == null) {
+                return;
+            }
+            String err = "info".equals(sub) ? host.keystoreInfo(f) : host.deleteKeystore(f);
+            if (err != null) {
+                out.line(Level.ERROR, err);
+            }
+        } else {
+            out.line(Level.ERROR, "Unknown keystore command: " + sub + "   (zishu help keystore)");
+        }
+    }
+
+    private void clone(List<String> args, Out out) {
+        List<String> a = new ArrayList<String>(args);
+        String branch = takeOption(a, "--branch");
+        String name = takeOption(a, "--name");
+        boolean auth = takeFlag(a, "--auth");
+        if (a.isEmpty()) {
+            out.line(Level.ERROR, "Usage: zishu clone <owner/repo | https://github.com/owner/repo> [--branch b] [--name n] [--auth]");
+            return;
+        }
+        com.zishu.ide.core.project.GitHubRepo repo = com.zishu.ide.core.project.GitHubRepo.parse(a.get(0));
+        if (repo == null) {
+            out.line(Level.ERROR, "That is not a GitHub repository. Use owner/repo or https://github.com/owner/repo.");
+            return;
+        }
+        if (branch != null) {
+            repo = repo.withRef(branch);
+        }
+        String err = host.cloneRepo(repo.owner + "/" + repo.repo, repo.ref, name == null ? repo.repo : name, auth);
+        if (err != null) {
+            out.line(Level.ERROR, err);
         }
     }
 

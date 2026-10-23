@@ -302,6 +302,25 @@ public class OnDeviceTest {
             }
         }
 
+        OnDeviceTools.KotlinJob lastKotlinJob;
+
+        @Override
+        public void compileKotlin(KotlinJob job, BuildLog log) throws ToolException {
+            calls.add("kotlinc");
+            lastKotlinJob = job;
+            if ("kotlinc".equals(failAt)) {
+                log.line("/p/Main.kt:3:5: error: unresolved reference: foo");
+                throw new ToolException("Kotlin compilation failed (COMPILATION_ERROR).");
+            }
+            try {
+                File c = new File(job.outDir, "com/example/myapp/KtMain.class");
+                c.getParentFile().mkdirs();
+                IoUtil.writeAtomic(c, new byte[]{(byte) 0xca, (byte) 0xfe});
+            } catch (IOException e) {
+                throw new ToolException(e.getMessage());
+            }
+        }
+
         @Override
         public void dex(DexJob job, BuildLog log) throws ToolException {
             calls.add("d8");
@@ -430,8 +449,9 @@ public class OnDeviceTest {
                 t, new CancelToken());
         assertFalse(dep.success);
         assertTrue(dep.errorTitle, dep.errorTitle.contains("androidx.core"));
-        BuildResult kt = run(makeProject(GOOD_GRADLE.replace("android {", "apply plugin: 'kotlin-android'\nandroid {"), null),
-                t, new CancelToken());
+        File ktProject = makeProject(GOOD_GRADLE.replace("android {", "apply plugin: 'kotlin-android'\nandroid {"), null);
+        write(new File(ktProject, "app/src/main/java/com/example/myapp/Main.kt"), "package com.example.myapp\nclass Main");
+        BuildResult kt = run(ktProject, t, new CancelToken());
         assertFalse(kt.success);
         assertTrue(kt.errorTitle, kt.errorTitle.contains("Kotlin"));
         assertTrue(t.calls.isEmpty());

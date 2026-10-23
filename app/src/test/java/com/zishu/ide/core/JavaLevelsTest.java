@@ -54,6 +54,11 @@ public class JavaLevelsTest {
     public void recognisesCompilerRejection() {
         assertTrue(JavaLevels.looksLikeLevelRejection("invalid source release: 21"));
         assertFalse(JavaLevels.looksLikeLevelRejection("Foo.java:3: error: cannot find symbol"));
-        assertTrue(JavaLevels.unsupportedHint(21).contains("Java 21"));
+        assertTrue(JavaLevels.unsupportedHint(21).contains("not 21"));
+        assertTrue(JavaLevels.looksLikeLevelRejection("source level should be in '1.1'...'1.8','9'...'15': 17"));
+        assertTrue(JavaLevels.usesBootclasspath(8));
+        assertFalse(JavaLevels.usesBootclasspath(11));
+        assertTrue(JavaLevels.compilerAccepts(15));
+        assertFalse(JavaLevels.compilerAccepts(17));
     }
 }

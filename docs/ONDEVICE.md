@@ -23,7 +23,7 @@ Zishu IDE can build simple Java Android projects **on the phone**, with no GitHu
 ## Requirements and limits
 
 - Android 8.0+ (API 26) and a 64-bit ARM phone. The IDE APK is arm64-only because of the bundled aapt2.
-- Java only. No Kotlin yet, no multi-module projects (`project(':x')`), no NDK code, no annotation processors (kapt/ksp/annotationProcessor are refused by name).
+- Java, plus experimental Kotlin (see below). No multi-module projects (`project(':x')`), no NDK code, no annotation processors (kapt/ksp/annotationProcessor are refused by name).
 - Projects are compiled against API 34. APIs newer than that will not compile.
 - A debug-signed APK cannot update an app installed with a different key. Uninstalling Zishu IDE deletes its signing key.
 - Java lambdas / method references are untested with this ECJ + android.jar combination.
@@ -56,3 +56,15 @@ version variables, `files('libs/x.jar')` and `fileTree(libs)` are read from buil
 Verified by unit tests only with fake repositories and fake tools. Real downloads, aapt2 with real AARs, D8 with real AndroidX
 and installing the result have to be checked on a phone. Not supported: Gradle module metadata, version ranges, tools:node merge
 rules, resource shrinking, R8, annotation processing, Kotlin.
+
+## Kotlin (experimental, not yet verified on a phone)
+
+If the module has `.kt` files in `src/main/java` or `src/main/kotlin`, the build:
+
+1. adds `org.jetbrains.kotlin:kotlin-stdlib:1.9.24` as an `implementation` dependency (unless declared),
+2. downloads `kotlin-compiler-embeddable:1.9.24` and its dependencies from Maven Central (once),
+3. converts those jars to dex with D8 (once, kept in `files/toolchains/kotlin-1.9.24`) and loads them with a `DexClassLoader`,
+4. runs `K2JVMCompiler` with `-no-jdk -no-stdlib -no-reflect` against android.jar + your libraries; the Java files and the generated `R.java` are passed too (read for symbols),
+5. compiles the Java files with ECJ with the Kotlin classes on the classpath, then dexes everything as usual.
+
+Limits: one fixed compiler version (1.9.24, the K1 front end: Kotlin 2.x-only language features will not compile, newer libraries are read with the metadata check skipped), no kapt/ksp, no Compose compiler plugin, a lot of RAM and time on the first build. If a stage fails, the build log names the stage; send it so the cause can be fixed. Cloud build remains the fallback.

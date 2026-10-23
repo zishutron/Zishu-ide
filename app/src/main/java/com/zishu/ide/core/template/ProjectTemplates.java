@@ -88,7 +88,7 @@ public final class ProjectTemplates {
 
     // ------------------------------------------------------------------ gradle
 
-    static String settingsGradle(ProjectConfig c) {
+    public static String settingsGradle(ProjectConfig c) {
         return "pluginManagement {\n"
                 + "    repositories {\n"
                 + "        google()\n"
@@ -107,7 +107,7 @@ public final class ProjectTemplates {
                 + "include ':app'\n";
     }
 
-    static String rootBuildGradle(ProjectConfig c, boolean kotlin) {
+    public static String rootBuildGradle(ProjectConfig c, boolean kotlin) {
         StringBuilder sb = new StringBuilder();
         sb.append("// Top-level build file. Plugin versions are declared here and applied in app/build.gradle.\n");
         sb.append("plugins {\n");
@@ -119,7 +119,7 @@ public final class ProjectTemplates {
         return sb.toString();
     }
 
-    static String appBuildGradle(ProjectConfig c, boolean kotlin) {
+    public static String appBuildGradle(ProjectConfig c, boolean kotlin) {
         String jv = "JavaVersion.VERSION_" + (c.javaLevel == 8 ? "1_8" : String.valueOf(c.javaLevel));
         StringBuilder sb = new StringBuilder();
         sb.append("plugins {\n");

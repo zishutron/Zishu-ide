@@ -100,6 +100,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                             dl.line("Downloading " + path.substring(path.lastIndexOf('/') + 1));
                         }
                     });
+                    maven.cache().setProgress(new DownloadLog(dl));
                 }
                 if (!plan.gradleDeps.deps.isEmpty()) {
                     libs = LibraryPlan.build(plan.gradleDeps, maven, plan.moduleDir, plan.manifestPackage, log);
@@ -282,6 +283,45 @@ public final class OnDeviceBuildEngine implements BuildEngine {
         }
     }
 
+    /** Logs percent, size, speed and time left for big downloads (small files only get their "Downloading" line). */
+    private static final class DownloadLog implements com.zishu.ide.core.maven.DownloadProgress {
+        private static final long SHOW_FROM = 512L * 1024;
+        private final BuildLog log;
+        private String current;
+        private com.zishu.ide.core.maven.DownloadMeter meter;
+        private boolean finished;
+
+        DownloadLog(BuildLog log) {
+            this.log = log;
+        }
+
+        @Override
+        public void bytes(String path, long done, long total) {
+            long now = System.currentTimeMillis();
+            if (!path.equals(current)) {
+                current = path;
+                finished = false;
+                meter = new com.zishu.ide.core.maven.DownloadMeter(path.substring(path.lastIndexOf('/') + 1), now, 2000);
+            }
+            if (finished) {
+                return;
+            }
+            long size = total > 0 ? total : done;
+            if (size < SHOW_FROM) {
+                return;
+            }
+            if (total > 0 && done >= total) {
+                finished = true;
+                log.line(meter.finish(now, done));
+                return;
+            }
+            String l = meter.update(now, done, total);
+            if (l != null) {
+                log.line(l);
+            }
+        }
+    }
+
     private BuildResult unexpected(Throwable e, File work, long start, String variant, BuildLog log) {
         StringWriter sw = new StringWriter();
         e.printStackTrace(new PrintWriter(sw));
@@ -422,6 +462,12 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                             + JavaLevels.MIN + " to " + JavaLevels.MAX + ".");
                 }
                 p.javaLevel = v.javaLevel;
+            }
+            if (p.javaLevel > JavaLevels.ECJ_MAX) {
+                log.line("WARNING: build.gradle asks for Java " + p.javaLevel + "; this phone's compiler goes up to Java "
+                        + JavaLevels.ECJ_MAX + ", so Java " + JavaLevels.ECJ_MAX + " is used. Code that needs a newer language "
+                        + "level will fail with a compiler error.");
+                p.javaLevel = JavaLevels.ECJ_MAX;
             }
             log.line("Java language level: " + p.javaLevel + (v.javaLevel == 0 ? " (default, build.gradle sets none)" : ""));
             if (v.compileSdk > androidJarApi) {

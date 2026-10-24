@@ -33,6 +33,7 @@ The GitHub token is never typed in the terminal (it would end up in history). Us
 | `zishu sign [apk] [--keystore f] [--alias a]` | sign with v1+v2, save `apk/<name>-signed.apk`, check it with the APK verifier |
 | `zishu verify [apk]` | check any APK's signature and show the signer's SHA-256 |
 | `zishu clone <owner/repo|url> [--branch b] [--name n] [--auth]` | download a GitHub repository ZIP and set it up as a project |
+| `zishu setup [all|androidx|kotlin|status]` | download the AndroidX starter libraries and prepare the Kotlin compiler for on-phone builds |
 
 Built APKs are copied to `<project>/apk/` (a normal, visible folder); the original stays under the hidden `.zishu/` folder.
 Keystore passwords are asked in a masked dialog only. They are not typed in the terminal, not saved, not logged and never

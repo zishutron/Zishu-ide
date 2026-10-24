@@ -49,6 +49,28 @@ jobs:
       - name: Unit tests
         run: ./gradlew --no-daemon --console=plain testDebugUnitTest
 
+      - name: Use the stable signing key (needs the 4 repository secrets)
+        env:
+          KS_B64: ${{ secrets.ZISHU_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ZISHU_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ZISHU_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ZISHU_KEY_PASSWORD }}
+        run: |
+          set -eu
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASS" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/zishu.keystore"
+            {
+              echo "ZISHU_KEYSTORE_FILE=$RUNNER_TEMP/zishu.keystore"
+              echo "ZISHU_KEYSTORE_PASSWORD=$KS_PASS"
+              echo "ZISHU_KEY_ALIAS=$KEY_ALIAS"
+              echo "ZISHU_KEY_PASSWORD=$KEY_PASS"
+            } >> "$GITHUB_ENV"
+            echo "SIGNING=stable" >> "$GITHUB_ENV"
+          else
+            echo "SIGNING=random" >> "$GITHUB_ENV"
+            echo "::warning::The signing secrets are not set, so this APK gets a random debug key and will NOT install over the previous build. Add ZISHU_KEYSTORE_BASE64, ZISHU_KEYSTORE_PASSWORD, ZISHU_KEY_ALIAS and ZISHU_KEY_PASSWORD under Settings > Secrets and variables > Actions."
+          fi
+
       - name: Build debug APK
         run: ./gradlew --no-daemon --console=plain assembleDebug
 
@@ -74,11 +96,17 @@ jobs:
             tool="NOT bundled - the on-phone build will report the toolchain as missing"
             echo "::warning::On-device toolchain is not in the APK (see the 'Fetch on-device toolchain' step)"
           fi
+          cert=$("$bt/apksigner" verify --print-certs "$apk" | grep -i "certificate SHA-256 digest" | head -n 1 | sed 's/.*: //')
           {
             echo "### Zishu IDE debug APK"
+            echo "- Signing key: $SIGNING (certificate SHA-256 $cert) - the same value on every build means updates install in place"
             echo "- On-device toolchain: $tool"
             echo "- Size: $(awk -v b=$bytes 'BEGIN{printf "%.2f MB", b/1048576}') (measured)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/zishu.keystore"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

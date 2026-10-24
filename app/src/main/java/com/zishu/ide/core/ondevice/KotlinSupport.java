@@ -43,6 +43,10 @@ public final class KotlinSupport {
         a.add("-no-jdk");
         a.add("-Xskip-metadata-version-check");
         a.add("-Xsuppress-version-warnings");
+        if (job.kotlinHome != null) {
+            a.add("-kotlin-home");
+            a.add(job.kotlinHome.getAbsolutePath());
+        }
         a.add("-jvm-target");
         a.add(jvmTarget(job.javaLevel));
         a.add("-module-name");

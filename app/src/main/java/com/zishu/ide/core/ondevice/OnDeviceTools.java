@@ -65,6 +65,8 @@ public interface OnDeviceTools {
         public File outDir;
         public int javaLevel = JavaLevels.DEFAULT;
         public String moduleName = "app";
+        /** An existing folder passed as -kotlin-home (the compiler cannot find its own home when it runs from dex). */
+        public File kotlinHome;
     }
 
     final class DexJob {

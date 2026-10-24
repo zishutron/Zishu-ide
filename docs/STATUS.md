@@ -1,29 +1,38 @@
 # Status: what is verified and what is not
 
-## Verified by running it (in the development environment)
-- Core logic compiles with `javac --release 8` and **160 JUnit tests pass** (templates incl. syntax-parsing
-  every generated Java file, ZIP safety, file manager, validation, editor algorithms, undo, search, JSON,
-  GitHub client against a scripted fake transport, build history, log analysis, APK inspection).
-- The cloud workflow YAML parses; its shell steps pass `bash -n`; its unzip and compileSdk-detection Python
-  were run against good and hostile inputs.
-- All three workflow YAML files parse. All app-layer Java files pass a syntax parse and use no lambdas; the
-  helper APIs, drawables and palette fields they reference exist.
+Last updated after on-phone testing by the author. "Verified" means it was run, not only written.
 
-## NOT verified (no Android SDK, JDK-Gradle build or network access was available)
-- **The Android UI layer has never been compiled against android.jar or run on a device or emulator.**
-  Expect compile errors and layout bugs on the first CI run; fix them from the build log.
-- No real APK was produced; **APK size is unmeasured** (the CI workflow measures and prints it).
-- The GitHub client has only been tested against a fake; real API behaviour is unconfirmed.
-- Building a project with SDK 35, and the Kotlin template, are unconfirmed until a real cloud build runs.
-- Gradle wrapper + AGP 8.7.3 for the IDE itself: configured, not executed here.
+## Verified in CI and in the development environment
+- Unit tests run on every push in GitHub Actions; the suite has 256 tests (templates, ZIP safety, validation, editor
+  algorithms, Maven resolution and POM/BOM handling, version catalogs, manifest merge, Java levels, class stubs, download
+  meter, JAR splitting, terminal commands, setup, on-device build planning with fake tools).
+- `assembleDebug` of the IDE itself runs in CI; the workflow checks package, minSdk, targetSdk and signature and prints the
+  measured APK size.
+- Stable CI signing: with the four signing secrets set, new IDE APKs install over the previous one.
 
-## Feature list
-Complete (code written, core tested): project model and templates; creation wizard validation; ZIP
-import/export with traversal protection; file manager; syntax highlighting, undo/redo, find/replace;
-build engine abstraction, cloud engine, history, cancellation; secure token storage; CI workflows.
+## Verified on real phones (reported by the author)
+- On-phone build, install and launch of generated Java projects and of a larger WebView app.
+- AndroidX / Maven libraries: annotation, core and AppCompat projects build; aapt2 compiles real AAR resources and D8 dexes
+  real AndroidX libraries.
+- Java levels up to 15 build; Java 15 is the default for new projects and for projects whose `build.gradle` sets no level.
+- Kotlin 1.9.24 on the phone: native Kotlin projects build, install and run, including a multi-file Kotlin calculator using
+  AndroidX and KTX libraries (62 libraries resolved, about 900 dex inputs, Java 11). Kotlin compile errors are reported with
+  file, line and message.
+- First launch: the "download build resources" popup appears when resources are missing; **Download** opens the terminal and
+  downloads everything there (`zishu setup all`); after that the popup does not appear again.
+- Build log scrolls on its own on the phone that had the Android 8 problem (the whole build screen no longer scrolls).
+- Terminal, visible `apk/` folder and download, signing with your own keystore, GitHub clone, ZIP import without Gradle files.
 
-Written but untested on a device: dashboard, new-project screen, editor, build, build tools, cloud
-settings and settings screens; SAF folder import; APK install/save.
+## Not verified yet
+- Kotlin mixed with hand-written Java files, and coroutines used directly in app code.
+- Lambdas and newer Java syntax across many projects; phones other than the ones tested.
+- Release signing of user apps; the cloud build against a real repository after the latest changes.
 
-Not implemented: on-device builds, SDK downloads, release signing of user projects, multi-file replace,
-tab restore, code completion.
+## Not supported on the phone (use the cloud build)
+Annotation processors (kapt, ksp, `annotationProcessor`), Compose, multi-module Gradle (`project(':x')`), NDK, dynamic
+versions such as `1.+`. These are refused with a clear message. See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md).
+
+## Notes
+- Maven, Google and GitHub could not be reached from the development environment, so everything that needs the network was
+  confirmed only on real phones or in CI, never simulated.
+- Android-layer Java is compiled only by CI; locally it is syntax-checked.

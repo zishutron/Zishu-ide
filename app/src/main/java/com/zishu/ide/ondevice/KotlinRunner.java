@@ -189,24 +189,25 @@ final class KotlinRunner {
         ok.delete();
         out.delete();
         if (!stubs.isEmpty()) {
-            File tmp = new File(dir, "tmp-stand-ins");
-            if (tmp.exists()) {
-                IoUtil.deleteRecursively(tmp);
-            }
-            tmp.mkdirs();
-            File jar = new File(tmp, "stand-ins.jar");
-            ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jar));
             try {
-                for (java.util.Map.Entry<String, Boolean> e : stubs.entrySet()) {
-                    zos.putNextEntry(new ZipEntry(e.getKey() + ".class"));
-                    zos.write(ClassStubs.stubClass(e.getKey(), e.getValue()));
-                    zos.closeEntry();
+                buildStandIns(stubs, dir, androidJar, out, log);
+            } catch (ToolException first) {
+                // maybe the dexer refuses classes named java.*; try again with the others only
+                java.util.Map<String, Boolean> others = new java.util.TreeMap<String, Boolean>(stubs);
+                java.util.Iterator<String> it = others.keySet().iterator();
+                while (it.hasNext()) {
+                    if (it.next().startsWith("java/")) {
+                        it.remove();
+                    }
                 }
-            } finally {
-                zos.close();
+                if (others.size() == stubs.size() || others.isEmpty()) {
+                    throw first;
+                }
+                log.line("WARNING: stand-ins for java.* classes were refused (" + first.getMessage() + "); continuing without them.");
+                out.delete();
+                stubs = others;
+                buildStandIns(stubs, dir, androidJar, out, log);
             }
-            convert(jar, java.util.Collections.singletonList(jar), androidJar, out, new File(dir, "tmp-stand-ins-dex"), log);
-            IoUtil.deleteRecursively(tmp);
             StringBuilder names = new StringBuilder();
             int n = 0;
             for (String k : stubs.keySet()) {
@@ -220,6 +221,28 @@ final class KotlinRunner {
         }
         IoUtil.writeUtf8Atomic(ok, key);
         return out.isFile() ? out : null;
+    }
+
+    private static void buildStandIns(java.util.Map<String, Boolean> stubs, File dir, File androidJar, File out, BuildLog log)
+            throws ToolException, IOException {
+        File tmp = new File(dir, "tmp-stand-ins");
+        if (tmp.exists()) {
+            IoUtil.deleteRecursively(tmp);
+        }
+        tmp.mkdirs();
+        File jar = new File(tmp, "stand-ins.jar");
+        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jar));
+        try {
+            for (java.util.Map.Entry<String, Boolean> e : stubs.entrySet()) {
+                zos.putNextEntry(new ZipEntry(e.getKey() + ".class"));
+                zos.write(ClassStubs.stubClass(e.getKey(), e.getValue()));
+                zos.closeEntry();
+            }
+        } finally {
+            zos.close();
+        }
+        convert(jar, java.util.Collections.singletonList(jar), androidJar, out, new File(dir, "tmp-stand-ins-dex"), log);
+        IoUtil.deleteRecursively(tmp);
     }
 
     /** The first version cached NN-name.dex.jar plus one READY marker; keep those converted jars instead of redoing 15 minutes. */
@@ -358,6 +381,7 @@ final class KotlinRunner {
             throw new ToolException(jar.getName() + " contains no classes.");
         }
         ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(out));
+        boolean finished = false;
         try {
             int dexCount = 0;
             long start = System.currentTimeMillis();
@@ -400,8 +424,19 @@ final class KotlinRunner {
                 System.gc();
             }
             copyResources(jar, zos);
+            finished = true;
         } finally {
-            zos.close();
+            if (finished) {
+                zos.close();
+            } else {
+                // keep the real error: closing an empty zip would throw "No entries" over it
+                try {
+                    zos.close();
+                } catch (IOException ignored) {
+                    // the conversion already failed
+                }
+                out.delete();
+            }
         }
         IoUtil.deleteRecursively(tmp);
         // Android 14+ refuses to load code from a writable file.

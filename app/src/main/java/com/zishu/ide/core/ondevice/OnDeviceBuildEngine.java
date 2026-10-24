@@ -94,13 +94,12 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 listener.onProgress(6);
                 if (maven != null) {
                     final BuildLog dl = log;
-                    maven.cache().setListener(new com.zishu.ide.core.maven.MavenCache.Listener() {
+                    com.zishu.ide.core.maven.DownloadReporter.attach(maven.cache(), new com.zishu.ide.core.maven.DownloadReporter.Sink() {
                         @Override
-                        public void downloading(String path) {
-                            dl.line("Downloading " + path.substring(path.lastIndexOf('/') + 1));
+                        public void line(String text) {
+                            dl.line(text);
                         }
                     });
-                    maven.cache().setProgress(new DownloadLog(dl));
                 }
                 if (!plan.gradleDeps.deps.isEmpty()) {
                     libs = LibraryPlan.build(plan.gradleDeps, maven, plan.moduleDir, plan.manifestPackage, log);
@@ -280,45 +279,6 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             return unexpected(e, work, start, variant, log);
         } catch (StackOverflowError e) {
             return unexpected(e, work, start, variant, log);
-        }
-    }
-
-    /** Logs percent, size, speed and time left for big downloads (small files only get their "Downloading" line). */
-    private static final class DownloadLog implements com.zishu.ide.core.maven.DownloadProgress {
-        private static final long SHOW_FROM = 512L * 1024;
-        private final BuildLog log;
-        private String current;
-        private com.zishu.ide.core.maven.DownloadMeter meter;
-        private boolean finished;
-
-        DownloadLog(BuildLog log) {
-            this.log = log;
-        }
-
-        @Override
-        public void bytes(String path, long done, long total) {
-            long now = System.currentTimeMillis();
-            if (!path.equals(current)) {
-                current = path;
-                finished = false;
-                meter = new com.zishu.ide.core.maven.DownloadMeter(path.substring(path.lastIndexOf('/') + 1), now, 2000);
-            }
-            if (finished) {
-                return;
-            }
-            long size = total > 0 ? total : done;
-            if (size < SHOW_FROM) {
-                return;
-            }
-            if (total > 0 && done >= total) {
-                finished = true;
-                log.line(meter.finish(now, done));
-                return;
-            }
-            String l = meter.update(now, done, total);
-            if (l != null) {
-                log.line(l);
-            }
         }
     }
 

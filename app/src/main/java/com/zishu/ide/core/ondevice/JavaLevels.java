@@ -2,7 +2,7 @@ package com.zishu.ide.core.ondevice;
 
 /** Java language levels for the on-device compiler (ECJ): 5 to 21 are accepted, the bundled ECJ decides what it can really compile. */
 public final class JavaLevels {
-    public static final int DEFAULT = 8;
+    public static final int DEFAULT = 15;
     public static final int MIN = 5;
     public static final int MAX = 21;
     /** Highest level the bundled ECJ 3.25.0 can compile (seen on a real phone: "'9'...'15'"). */

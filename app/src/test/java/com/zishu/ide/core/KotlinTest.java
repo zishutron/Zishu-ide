@@ -52,6 +52,14 @@ public class KotlinTest {
         repoFiles.put("javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.jar", TestSupport.utf8("stax"));
         repoFiles.put("javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.pom", TestSupport.utf8(
                 "<project><groupId>javax.xml.stream</groupId><artifactId>stax-api</artifactId><version>1.0-2</version></project>"));
+        repoFiles.put(k + "kotlin-reflect/1.6.10/kotlin-reflect-1.6.10.jar", TestSupport.utf8("reflect"));
+        repoFiles.put(k + "kotlin-reflect/1.6.10/kotlin-reflect-1.6.10.pom", TestSupport.utf8(
+                "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-reflect</artifactId><version>1.6.10</version></project>"));
+        repoFiles.put("org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.6.4/kotlinx-coroutines-core-jvm-1.6.4.jar", TestSupport.utf8("coroutines"));
+        repoFiles.put("org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.6.4/kotlinx-coroutines-core-jvm-1.6.4.pom", TestSupport.utf8(
+                "<project><groupId>org.jetbrains.kotlinx</groupId><artifactId>kotlinx-coroutines-core-jvm</artifactId><version>1.6.4</version>"
+                + "<dependencies><dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib-jdk8</artifactId>"
+                + "<version>1.6.21</version></dependency></dependencies></project>"));
         repoFiles.put(k + "kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.jar", TestSupport.utf8("stdlib"));
         repoFiles.put(k + "kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.pom", TestSupport.utf8(
                 "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId><version>1.9.24</version></project>"));
@@ -112,7 +120,10 @@ public class KotlinTest {
         assertTrue(kj.sourceFiles.toString().contains("R.java"));
         assertEquals(t.androidJar, kj.classpath.get(0));
         assertTrue(kj.classpath.toString(), kj.classpath.toString().contains("kotlin-stdlib-1.9.24.jar"));
-        assertEquals(3, kj.compilerJars.size());
+        assertEquals(5, kj.compilerJars.size());
+        assertTrue(kj.compilerJars.toString(), kj.compilerJars.toString().contains("kotlinx-coroutines-core-jvm-1.6.4.jar"));
+        assertTrue(kj.compilerJars.toString(), kj.compilerJars.toString().contains("kotlin-reflect-1.6.10.jar"));
+        assertFalse("the old jdk8 shim is excluded", kj.compilerJars.toString().contains("jdk8"));
         assertTrue(kj.compilerJars.toString(), kj.compilerJars.toString().contains("stax-api-1.0-2.jar"));
         assertEquals("com_example_myapp", kj.moduleName);
         // ECJ sees the Kotlin output and the stdlib

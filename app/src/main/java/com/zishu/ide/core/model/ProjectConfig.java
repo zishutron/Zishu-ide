@@ -17,7 +17,7 @@ public final class ProjectConfig {
     public String initialActivity = "MainActivity";
     public UiApproach ui = UiApproach.XML_LAYOUT;
     /** Java source/target level used by compileOptions: 8, 11 or 17. */
-    public int javaLevel = 17;
+    public int javaLevel = 15;
     /** Only for WEBVIEW_SITE. */
     public String webUrl = "";
     /** Only for WEBVIEW_SITE: local pages always run with JavaScript enabled. */

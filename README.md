@@ -80,8 +80,6 @@ Verified by running it on real phones (reported by the author while testing):
 - A stable CI signing key: new IDE APKs install over the previous one.
 
 Not verified yet:
-- The first-run download popup and `zishu setup` end to end, the Android 8 build-log scroll fix, and the Java 15 defaults on all
-  phones.
 - Kotlin mixed with hand-written Java files, coroutines used directly in app code, kapt/ksp and Compose (not supported).
 - Lambdas and newer Java syntax across many projects; phones other than the ones tested; release signing of user apps.
 - Annotation processors, Compose, multi-module Gradle projects and NDK (not supported yet).

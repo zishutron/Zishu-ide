@@ -76,6 +76,7 @@ Verified by running it on real phones (reported by the author while testing):
 - Kotlin on the phone: native Kotlin projects build, install and run, including a multi-file Kotlin app (a calculator) using
   AndroidX and KTX libraries (62 libraries resolved, about 900 dex inputs, Java 11); a Kotlin compile error is reported with
   file, line and message in the build log.
+- The first-run download popup appears when resources are missing, **Download** fetches them in the terminal, and the popup does not return afterwards; the build log scrolls on its own (Android 8 fix); Java 15 is the default.
 - Terminal, visible `apk/` folder and download, signing with your own keystore, GitHub clone, ZIP import without Gradle files.
 - A stable CI signing key: new IDE APKs install over the previous one.
 

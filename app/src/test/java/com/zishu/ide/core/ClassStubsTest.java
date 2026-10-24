@@ -32,10 +32,11 @@ public class ClassStubsTest {
         o.writeInt(0xCAFEBABE);
         o.writeShort(0);
         o.writeShort(52);
-        o.writeShort(17);
+        o.writeShort(18);
         String[] utf = {"p/Uses", null, "java/awt/Component", null, "java/beans/PropertyChangeListener", null,
             "(Ljava/awt/Color;)Ljavax/swing/Icon;", "java/awt/Point", null, "<init>", "()V", null, null, "Lnot/a/Type;",
-            "java/beans/PropertyChangeEvent", null};
+            "java/beans/PropertyChangeEvent", null,
+            "Lcom/sun/tools/javac/util/List<Lcom/sun/tools/javac/tree/JCTree$JCAnnotation;>;"};
         // 1 Utf8, 2 Class, 3 Utf8, 4 Class, 5 Utf8, 6 Class, 7 Utf8, 8 Utf8, 9 Class, 10 Utf8, 11 Utf8,
         // 12 NameAndType, 13 Methodref, 14 Utf8, 15 Utf8, 16 Class
         for (int i = 0; i < utf.length; i++) {
@@ -83,6 +84,11 @@ public class ClassStubsTest {
         assertEquals(stubs.toString(), Boolean.FALSE, stubs.get("java/awt/Point"));           // constructed
         assertTrue(stubs.toString(), stubs.containsKey("java/awt/Color"));
         assertTrue(stubs.toString(), stubs.containsKey("java/beans/PropertyChangeEvent"));
+        assertTrue(stubs.toString(), stubs.containsKey("com/sun/tools/javac/util/List"));
+        assertTrue(stubs.toString(), stubs.containsKey("com/sun/tools/javac/tree/JCTree$JCAnnotation"));
+        for (String name : stubs.keySet()) {
+            assertTrue("valid class name: " + name, name.matches("[A-Za-z0-9_$/]+"));
+        }
         assertFalse("a string that only looks like a descriptor is not a class", stubs.containsKey("not/a/Type"));
         assertFalse("classes of the jar itself are never stubbed", stubs.containsKey("p/Uses"));
     }

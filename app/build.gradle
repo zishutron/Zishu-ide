@@ -29,6 +29,14 @@ android {
                 keyAlias System.getenv('ZISHU_KEY_ALIAS')
                 keyPassword System.getenv('ZISHU_KEY_PASSWORD')
             }
+            // CI debug builds use the same key, so every new APK installs over the previous one
+            // (without it each CI run signs with a fresh random debug key and Android refuses the update).
+            debug {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('ZISHU_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ZISHU_KEY_ALIAS')
+                keyPassword System.getenv('ZISHU_KEY_PASSWORD')
+            }
         }
     }
 

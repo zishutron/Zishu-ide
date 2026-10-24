@@ -53,6 +53,7 @@ final class KotlinRunner {
 
     static void compile(Context ctx, final OnDeviceTools.KotlinJob job, File androidJar, final BuildLog log) throws ToolException {
         ClassLoader cl = prepare(ctx, job, androidJar, log);
+        job.kotlinHome = new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
         final List<String> args = KotlinSupport.arguments(job);
         log.line("$ kotlinc (" + countKt(job) + " Kotlin file(s), jvm-target " + KotlinSupport.jvmTarget(job.javaLevel) + ")");
         final ByteArrayOutputStream buf = new ByteArrayOutputStream();

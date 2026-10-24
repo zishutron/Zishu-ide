@@ -175,7 +175,7 @@ public final class ClassStubs {
                 }
             }
             String u = utf[i];
-            if (u != null && u.length() > 2 && (u.charAt(0) == '(' || u.charAt(0) == 'L' || u.charAt(0) == '[') && u.indexOf(';') > 0) {
+            if (u != null && u.length() > 2 && u.length() < 4000 && u.indexOf(';') > 0 && u.indexOf('L') >= 0) {
                 addDescriptorTypes(u, referenced);
             }
         }
@@ -205,23 +205,18 @@ public final class ClassStubs {
         return null;
     }
 
-    /** Class names inside a field or method descriptor such as (Ljava/awt/Color;I)Ljavax/swing/Icon; */
+    /** A class name inside a descriptor or generic signature: L, a package path, then ; (end) or < (type arguments) or . (inner class). */
+    private static final java.util.regex.Pattern TYPE =
+            java.util.regex.Pattern.compile("L([A-Za-z0-9_$]+(?:/[A-Za-z0-9_$]+)+)[;<.]");
+
+    /**
+     * Class names inside a field or method descriptor such as (Ljava/awt/Color;I)Ljavax/swing/Icon; or a generic
+     * signature such as Ljava/util/List&lt;Ljava/awt/Color;&gt;; . Only plain names (letters, digits, _ and $) are accepted.
+     */
     static void addDescriptorTypes(String d, Set<String> out) {
-        int i = 0;
-        while (i < d.length()) {
-            if (d.charAt(i) == 'L') {
-                int end = d.indexOf(';', i);
-                if (end < 0) {
-                    return;
-                }
-                String n = d.substring(i + 1, end);
-                if (n.indexOf('/') > 0 && n.indexOf(' ') < 0 && n.indexOf('(') < 0) {
-                    out.add(n);
-                }
-                i = end + 1;
-            } else {
-                i++;
-            }
+        java.util.regex.Matcher m = TYPE.matcher(d);
+        while (m.find()) {
+            out.add(m.group(1));
         }
     }
 

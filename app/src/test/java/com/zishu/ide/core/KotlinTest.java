@@ -49,6 +49,9 @@ public class KotlinTest {
                 "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-compiler-embeddable</artifactId><version>1.9.24</version>"
                 + "<dependencies><dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId>"
                 + "<version>1.9.24</version></dependency></dependencies></project>"));
+        repoFiles.put("javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.jar", TestSupport.utf8("stax"));
+        repoFiles.put("javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.pom", TestSupport.utf8(
+                "<project><groupId>javax.xml.stream</groupId><artifactId>stax-api</artifactId><version>1.0-2</version></project>"));
         repoFiles.put(k + "kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.jar", TestSupport.utf8("stdlib"));
         repoFiles.put(k + "kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.pom", TestSupport.utf8(
                 "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId><version>1.9.24</version></project>"));
@@ -109,7 +112,8 @@ public class KotlinTest {
         assertTrue(kj.sourceFiles.toString().contains("R.java"));
         assertEquals(t.androidJar, kj.classpath.get(0));
         assertTrue(kj.classpath.toString(), kj.classpath.toString().contains("kotlin-stdlib-1.9.24.jar"));
-        assertEquals(2, kj.compilerJars.size());
+        assertEquals(3, kj.compilerJars.size());
+        assertTrue(kj.compilerJars.toString(), kj.compilerJars.toString().contains("stax-api-1.0-2.jar"));
         assertEquals("com_example_myapp", kj.moduleName);
         // ECJ sees the Kotlin output and the stdlib
         assertTrue(t.classpath.toString(), t.classpath.contains(kj.outDir));

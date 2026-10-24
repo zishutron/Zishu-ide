@@ -54,6 +54,7 @@ final class KotlinRunner {
     static void compile(Context ctx, final OnDeviceTools.KotlinJob job, File androidJar, final BuildLog log) throws ToolException {
         ClassLoader cl = prepare(ctx, job, androidJar, log);
         job.kotlinHome = new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
+        ensurePluginRoot(new File(job.kotlinHome, "plugin-root"), job.compilerJars);
         final List<String> args = KotlinSupport.arguments(job);
         log.line("$ kotlinc (" + countKt(job) + " Kotlin file(s), jvm-target " + KotlinSupport.jvmTarget(job.javaLevel) + ")");
         final ByteArrayOutputStream buf = new ByteArrayOutputStream();
@@ -171,9 +172,97 @@ final class KotlinRunner {
         }
         // Parent = the boot loader chain only, so the IDE's own classes never shadow the compiler's.
         ClassLoader parent = ClassLoader.getSystemClassLoader().getParent();
-        loader = new DexClassLoader(path.toString(), null, null, parent);
+        loader = new CompilerLoader(path.toString(), parent, new File(dir, "plugin-root"));
         loaderKey = key;
         return loader;
+    }
+
+    /**
+     * The compiler asks "which jar did this class come from?" (class.getResource) to find its own configuration. From dex
+     * there is no such file, so for the compiler's own classes this loader answers with a real folder that holds the
+     * configuration (META-INF/extensions/*.xml, unpacked once from the compiler jar).
+     */
+    private static final class CompilerLoader extends DexClassLoader {
+        private final File pluginRoot;
+
+        CompilerLoader(String dexPath, ClassLoader parent, File pluginRoot) {
+            super(dexPath, null, null, parent);
+            this.pluginRoot = pluginRoot;
+        }
+
+        @Override
+        protected java.net.URL findResource(String name) {
+            java.net.URL url = super.findResource(name);
+            if (url != null || !name.endsWith(".class") || !name.startsWith("org/jetbrains/kotlin/")) {
+                return url;
+            }
+            try {
+                File marker = new File(pluginRoot, name);
+                if (!marker.isFile()) {
+                    File parent = marker.getParentFile();
+                    if (!parent.isDirectory() && !parent.mkdirs()) {
+                        return null;
+                    }
+                    if (!marker.createNewFile() && !marker.isFile()) {
+                        return null;
+                    }
+                }
+                return marker.toURI().toURL();
+            } catch (IOException e) {
+                return null;
+            }
+        }
+    }
+
+    /** Unpacks META-INF/extensions/* of the compiler jar into {@code root} (the folder the compiler reads its configuration from). */
+    private static void ensurePluginRoot(File root, List<File> compilerJars) throws ToolException {
+        File ok = new File(root, "META-INF/extensions/compiler.xml");
+        if (ok.isFile()) {
+            return;
+        }
+        File jar = null;
+        for (File f : compilerJars) {
+            if (f.getName().startsWith("kotlin-compiler-embeddable")) {
+                jar = f;
+            }
+        }
+        if (jar == null) {
+            throw new ToolException("kotlin-compiler-embeddable is missing from the resolved compiler jars.");
+        }
+        try {
+            java.util.zip.ZipFile zf = new java.util.zip.ZipFile(jar);
+            try {
+                java.util.Enumeration<? extends ZipEntry> en = zf.entries();
+                byte[] b = new byte[16 * 1024];
+                while (en.hasMoreElements()) {
+                    ZipEntry e = en.nextElement();
+                    String n = e.getName();
+                    if (e.isDirectory() || !n.startsWith("META-INF/extensions/") || n.contains("..")) {
+                        continue;
+                    }
+                    File target = new File(root, n);
+                    target.getParentFile().mkdirs();
+                    java.io.InputStream in = zf.getInputStream(e);
+                    FileOutputStream os = new FileOutputStream(target);
+                    try {
+                        int r;
+                        while ((r = in.read(b)) > 0) {
+                            os.write(b, 0, r);
+                        }
+                    } finally {
+                        in.close();
+                        os.close();
+                    }
+                }
+            } finally {
+                zf.close();
+            }
+        } catch (IOException e) {
+            throw new ToolException("Could not unpack the Kotlin compiler configuration: " + e.getMessage(), e);
+        }
+        if (!ok.isFile()) {
+            throw new ToolException("The Kotlin compiler jar has no META-INF/extensions/compiler.xml.");
+        }
     }
 
     private static String marker(List<File> jars) {

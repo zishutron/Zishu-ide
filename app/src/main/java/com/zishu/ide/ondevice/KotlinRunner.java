@@ -125,41 +125,32 @@ final class KotlinRunner {
         if (loader != null && key.equals(loaderKey)) {
             return loader;
         }
-        File ready = new File(dir, "READY");
         List<File> dexJars = new ArrayList<File>();
         try {
-            boolean cached = false;
-            if (ready.isFile() && key.equals(IoUtil.readUtf8(ready, 1024 * 1024))) {
-                cached = true;
-                for (int i = 0; i < job.compilerJars.size(); i++) {
-                    File d = dexJar(dir, i, job.compilerJars.get(i));
-                    if (!d.isFile()) {
-                        cached = false;
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                throw new ToolException("Cannot create " + dir);
+            }
+            migrateLegacy(dir, job.compilerJars);
+            boolean converted = false;
+            for (File jar : job.compilerJars) {
+                File out = dexJar(dir, jar);
+                File ok = new File(dir, jar.getName() + ".ok");
+                String want = "split-" + SPLIT_BYTES + ":" + jar.length();
+                if (!(out.isFile() && ok.isFile() && want.equals(IoUtil.readUtf8(ok, 1024)))) {
+                    if (!converted) {
+                        log.line("Preparing the Kotlin compiler for this phone (only jars that are not converted yet; "
+                                + "the big one takes several minutes)...");
+                        converted = true;
                     }
-                    dexJars.add(d);
-                }
-            }
-            if (!cached) {
-                dexJars.clear();
-                log.line("Preparing the Kotlin compiler for this phone (first time only; this can take several minutes)...");
-                if (dir.exists()) {
-                    IoUtil.deleteRecursively(dir);
-                }
-                if (!dir.mkdirs()) {
-                    throw new ToolException("Cannot create " + dir);
-                }
-                for (int i = 0; i < job.compilerJars.size(); i++) {
-                    File jar = job.compilerJars.get(i);
-                    File out = dexJar(dir, i, jar);
+                    ok.delete();
+                    out.delete();
                     log.line("  converting " + jar.getName() + " (" + IoUtil.formatSize(jar.length()) + ")");
-                    convert(jar, job.compilerJars, androidJar, out, new File(dir, "tmp-" + i), log);
-                    dexJars.add(out);
+                    convert(jar, job.compilerJars, androidJar, out, new File(dir, "tmp-" + jar.getName()), log);
+                    IoUtil.writeUtf8Atomic(ok, want);
                 }
-                IoUtil.writeUtf8Atomic(ready, key);
-                log.line("Kotlin compiler converted and cached.");
-            } else {
-                log.line("Kotlin compiler: using the converted copy on this phone.");
+                dexJars.add(out);
             }
+            log.line(converted ? "Kotlin compiler converted and cached." : "Kotlin compiler: using the converted copy on this phone.");
         } catch (IOException e) {
             throw new ToolException("Could not prepare the Kotlin compiler: " + e.getMessage(), e);
         }
@@ -175,6 +166,24 @@ final class KotlinRunner {
         loader = new CompilerLoader(path.toString(), parent, new File(dir, "plugin-root"));
         loaderKey = key;
         return loader;
+    }
+
+    /** The first version cached NN-name.dex.jar plus one READY marker; keep those converted jars instead of redoing 15 minutes. */
+    private static void migrateLegacy(File dir, List<File> jars) throws IOException {
+        File ready = new File(dir, "READY");
+        if (!ready.isFile()) {
+            return;
+        }
+        String text = IoUtil.readUtf8(ready, 1024 * 1024);
+        for (int i = 0; i < jars.size(); i++) {
+            File jar = jars.get(i);
+            File old = new File(dir, String.format(java.util.Locale.US, "%02d-%s.dex.jar", i, jar.getName().replace(".jar", "")));
+            File neu = dexJar(dir, jar);
+            if (old.isFile() && !neu.exists() && text.contains("\n" + jar.getName() + ":" + jar.length()) && old.renameTo(neu)) {
+                IoUtil.writeUtf8Atomic(new File(dir, jar.getName() + ".ok"), "split-" + SPLIT_BYTES + ":" + jar.length());
+            }
+        }
+        ready.delete();
     }
 
     /**
@@ -273,8 +282,8 @@ final class KotlinRunner {
         return sb.toString();
     }
 
-    private static File dexJar(File dir, int index, File jar) {
-        return new File(dir, String.format(java.util.Locale.US, "%02d-%s.dex.jar", index, jar.getName().replace(".jar", "")));
+    private static File dexJar(File dir, File jar) {
+        return new File(dir, jar.getName().replace(".jar", "") + ".dex.jar");
     }
 
     /**
@@ -284,6 +293,9 @@ final class KotlinRunner {
      */
     private static void convert(final File jar, final List<File> allJars, final File androidJar, File out, File tmp, final BuildLog log)
             throws ToolException, IOException {
+        if (tmp.exists()) {
+            IoUtil.deleteRecursively(tmp);
+        }
         if (!tmp.mkdirs() && !tmp.isDirectory()) {
             throw new IOException("Cannot create " + tmp);
         }

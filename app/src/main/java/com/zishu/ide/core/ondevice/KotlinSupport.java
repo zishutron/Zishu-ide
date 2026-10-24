@@ -18,6 +18,8 @@ import java.util.List;
 public final class KotlinSupport {
     public static final String VERSION = "1.9.24";
     public static final String COMPILER = "org.jetbrains.kotlin:kotlin-compiler-embeddable:" + VERSION;
+    /** The compiler reads its XML configuration through StAX (javax.xml.stream), which Android does not have. */
+    public static final String STAX_API = "javax.xml.stream:stax-api:1.0-2";
     public static final String STDLIB = "org.jetbrains.kotlin:kotlin-stdlib:" + VERSION;
 
     private KotlinSupport() {
@@ -72,6 +74,7 @@ public final class KotlinSupport {
     public static List<File> resolveCompiler(MavenDependencies deps, BuildLog log) throws IOException {
         List<Resolver.Root> roots = new ArrayList<Resolver.Root>();
         roots.add(new Resolver.Root(Coordinate.parse(COMPILER), true, true, null));
+        roots.add(new Resolver.Root(Coordinate.parse(STAX_API), true, true, null));
         Resolver.Result res;
         try {
             res = deps.resolver().resolve(roots, new java.util.HashMap<String, String>());

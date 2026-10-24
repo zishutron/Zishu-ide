@@ -20,6 +20,12 @@ public final class KotlinSupport {
     public static final String COMPILER = "org.jetbrains.kotlin:kotlin-compiler-embeddable:" + VERSION;
     /** The compiler reads its XML configuration through StAX (javax.xml.stream), which Android does not have. */
     public static final String STAX_API = "javax.xml.stream:stax-api:1.0-2";
+    /**
+     * The compiler needs these at run time but its POM does not bring them in (the Gradle module metadata does):
+     * kotlin-reflect and the coroutines library (its progress/cancellation code uses kotlinx.coroutines.Job).
+     */
+    public static final String REFLECT = "org.jetbrains.kotlin:kotlin-reflect:1.6.10";
+    public static final String COROUTINES = "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.6.4";
     public static final String STDLIB = "org.jetbrains.kotlin:kotlin-stdlib:" + VERSION;
 
     private KotlinSupport() {
@@ -75,6 +81,10 @@ public final class KotlinSupport {
         List<Resolver.Root> roots = new ArrayList<Resolver.Root>();
         roots.add(new Resolver.Root(Coordinate.parse(COMPILER), true, true, null));
         roots.add(new Resolver.Root(Coordinate.parse(STAX_API), true, true, null));
+        roots.add(new Resolver.Root(Coordinate.parse(REFLECT), true, true, null));
+        // the coroutines POM names an old kotlin-stdlib-jdk8; the stdlib already comes with the compiler
+        roots.add(new Resolver.Root(Coordinate.parse(COROUTINES), true, true,
+                new java.util.ArrayList<String>(java.util.Arrays.asList("org.jetbrains.kotlin:*"))));
         Resolver.Result res;
         try {
             res = deps.resolver().resolve(roots, new java.util.HashMap<String, String>());

@@ -222,7 +222,7 @@ public class TemplateTest {
         assertTrue(f.containsKey("app/src/main/java/com/example/mykotlinapp/MainActivity.kt"));
         assertTrue(text(f, "build.gradle").contains("org.jetbrains.kotlin.android' version '2.0.21'"));
         assertTrue(text(f, "app/build.gradle").contains("id 'org.jetbrains.kotlin.android'"));
-        assertTrue(text(f, "app/build.gradle").contains("jvmTarget = '17'"));
+        assertTrue(text(f, "app/build.gradle").contains("jvmTarget = '15'"));
         assertAllXmlWellFormed(f);
         assertResourceReferencesResolve(f);
     }

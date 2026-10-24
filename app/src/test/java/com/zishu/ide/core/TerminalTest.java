@@ -184,6 +184,7 @@ public class TerminalTest {
         @Override public String keystoreInfo(File k) { last = "info " + k.getName(); return null; }
         @Override public String deleteKeystore(File k) { last = "delete " + k.getName(); return null; }
         @Override public String cloneRepo(String r, String ref, String n, boolean t) { last = "clone " + r + " " + ref + " " + n + " " + t; return null; }
+        @Override public String setupResources(String what) { last = "setup " + what; return null; }
     }
 
     private ProjectInfo project(String name) {
@@ -329,6 +330,24 @@ public class TerminalTest {
         assertTrue(h.installed);
         assertTrue(run(c, "zishu projects").contains("no projects"));
         assertTrue(run(c, "zishu history").contains("no recorded builds"));
+    }
+
+    @Test
+    public void setupCommandPassesWhatToDownload() {
+        FakeHost h = new FakeHost();
+        IdeCommands c = new IdeCommands(h);
+        run(c, "zishu setup");
+        assertEquals("setup all", h.last);
+        run(c, "zishu setup kotlin");
+        assertEquals("setup kotlin", h.last);
+        run(c, "zishu setup androidx");
+        assertEquals("setup androidx", h.last);
+        run(c, "zishu setup status");
+        assertEquals("setup status", h.last);
+        h.last = "none";
+        assertTrue(run(c, "zishu setup bogus").contains("Usage: zishu setup"));
+        assertEquals("none", h.last);
+        assertTrue(run(c, "zishu help setup").contains("zishu setup status"));
     }
 
     @Test

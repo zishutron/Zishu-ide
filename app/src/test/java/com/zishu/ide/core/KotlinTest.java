@@ -146,6 +146,17 @@ public class KotlinTest {
     }
 
     @Test
+    public void javaLevelDefaultsToFifteenWhenBuildGradleSaysNothing() throws Exception {
+        OnDeviceTest.FakeTools t = new OnDeviceTest.FakeTools(tmp.newFile("android.jar"));
+        String gradle = GRADLE.replace(" compileOptions {\n sourceCompatibility JavaVersion.VERSION_11\n }\n", "");
+        assertTrue(gradle, !gradle.contains("sourceCompatibility"));
+        BuildResult r = build(project(gradle, false), t, deps());
+        assertTrue(r.log, r.success);
+        assertTrue(r.log, r.log.contains("Java language level: 15 (default"));
+        assertEquals(15, com.zishu.ide.core.ondevice.JavaLevels.DEFAULT);
+    }
+
+    @Test
     public void kotlinErrorsFailTheBuildWithTheCompilerMessage() throws Exception {
         publish();
         OnDeviceTest.FakeTools t = new OnDeviceTest.FakeTools(tmp.newFile("android.jar"));

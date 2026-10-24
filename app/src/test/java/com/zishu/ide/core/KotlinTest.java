@@ -120,6 +120,17 @@ public class KotlinTest {
     }
 
     @Test
+    public void levelsAboveTheCompilerAreLoweredWithAWarning() throws Exception {
+        publish();
+        OnDeviceTest.FakeTools t = new OnDeviceTest.FakeTools(tmp.newFile("android.jar"));
+        BuildResult r = build(project(GRADLE.replace("VERSION_11", "VERSION_17"), true), t, deps());
+        assertTrue(r.log, r.success);
+        assertEquals(15, t.lastKotlinJob.javaLevel);
+        assertTrue(r.log, r.log.contains("WARNING: build.gradle asks for Java 17"));
+        assertTrue(r.log, r.log.contains("Java language level: 15"));
+    }
+
+    @Test
     public void kotlinErrorsFailTheBuildWithTheCompilerMessage() throws Exception {
         publish();
         OnDeviceTest.FakeTools t = new OnDeviceTest.FakeTools(tmp.newFile("android.jar"));

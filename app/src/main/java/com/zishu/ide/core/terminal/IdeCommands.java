@@ -106,6 +106,12 @@ public final class IdeCommands {
 
         /** Downloads a GitHub repository and sets it up as a new project; reports progress itself. @return an error text, or null when started */
         String cloneRepo(String repo, String ref, String projectName, boolean useToken);
+
+        /**
+         * Downloads the build resources (AndroidX libraries, Kotlin compiler) or reports their state; progress is printed by
+         * the host. @param what "all", "androidx", "kotlin" or "status". @return an error text, or null when started
+         */
+        String setupResources(String what);
     }
 
     private static final Pattern OWNER_REPO = Pattern.compile("[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}");
@@ -126,7 +132,7 @@ public final class IdeCommands {
     public static String[] subcommands() {
         return new String[]{"help", "projects", "open", "status", "engine", "build", "cancel", "log", "apk", "install",
                 "history", "cloud", "selftest", "editor", "clear", "version", "clone", "download", "apks", "sign", "verify",
-                "keystore"};
+                "keystore", "setup"};
     }
 
     public void run(List<String> words, Out out) {
@@ -182,6 +188,8 @@ public final class IdeCommands {
             keystore(args, out);
         } else if ("clone".equals(sub)) {
             clone(args, out);
+        } else if ("setup".equals(sub)) {
+            setup(args, out);
         } else if ("cloud".equals(sub)) {
             cloud(args, out);
         } else if ("selftest".equals(sub)) {
@@ -230,6 +238,7 @@ public final class IdeCommands {
                 {"zishu sign [apk] [--keystore f]", "sign an APK with your own key (zishu help sign)"},
                 {"zishu verify [apk]", "check an APK's signature"},
                 {"zishu clone <github repo>", "download a GitHub repo as a new project"},
+                {"zishu setup [androidx|kotlin|status]", "download the AndroidX libraries and the Kotlin compiler"},
                 {"zishu history", "recent builds of this project"},
                 {"zishu engine [auto|device|cloud]", "show or choose the build engine"},
                 {"zishu cloud ...", "cloud build settings (zishu help cloud)"},
@@ -269,6 +278,14 @@ public final class IdeCommands {
                     + "zishu sign <apk> --keystore <file> --alias <alias>\n"
                     + "The result is saved next to the original as <name>-signed.apk and is checked with the\n"
                     + "Android APK verifier before it is reported as signed.";
+        }
+        if ("setup".equals(t)) {
+            return "zishu setup                  download and prepare everything that is still missing\n"
+                    + "zishu setup androidx         only the AndroidX starter libraries (AppCompat, Core KTX, ConstraintLayout, Material)\n"
+                    + "zishu setup kotlin           only the Kotlin compiler (download, then convert it for this phone)\n"
+                    + "zishu setup status           show what is already on the phone\n"
+                    + "Needs internet. Keep the app open and the screen on: converting the Kotlin compiler can take 10 to 15 minutes.\n"
+                    + "Nothing is lost if it stops; running it again continues with what is missing.";
         }
         if ("clone".equals(t)) {
             return "zishu clone <owner/repo | https://github.com/owner/repo> [--branch b] [--name projectName] [--auth]\n"
@@ -746,6 +763,18 @@ public final class IdeCommands {
             }
         } else {
             out.line(Level.ERROR, "Unknown keystore command: " + sub + "   (zishu help keystore)");
+        }
+    }
+
+    private void setup(List<String> args, Out out) {
+        String what = args.isEmpty() ? "all" : args.get(0);
+        if (!"all".equals(what) && !"androidx".equals(what) && !"kotlin".equals(what) && !"status".equals(what)) {
+            out.line(Level.ERROR, "Usage: zishu setup [all|androidx|kotlin|status]   (zishu help setup)");
+            return;
+        }
+        String err = host.setupResources(what);
+        if (err != null) {
+            out.line(Level.ERROR, err);
         }
     }
 

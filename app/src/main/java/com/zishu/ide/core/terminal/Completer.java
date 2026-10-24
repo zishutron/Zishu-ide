@@ -46,13 +46,15 @@ public final class Completer {
             } else if ("cloud".equals(sub)) {
                 pool.addAll(Arrays.asList("status", "repo", "workflow", "public", "settings"));
             } else if ("help".equals(sub)) {
-                pool.addAll(Arrays.asList("cloud", "build", "keystore", "sign", "clone"));
+                pool.addAll(Arrays.asList("cloud", "build", "keystore", "sign", "clone", "setup"));
             } else if ("keystore".equals(sub)) {
                 pool.addAll(Arrays.asList("list", "create", "import", "info", "delete"));
             } else if ("sign".equals(sub)) {
                 pool.addAll(Arrays.asList("--keystore", "--alias"));
             } else if ("clone".equals(sub)) {
                 pool.addAll(Arrays.asList("--branch", "--name", "--auth"));
+            } else if ("setup".equals(sub)) {
+                pool.addAll(Arrays.asList("all", "androidx", "kotlin", "status"));
             }
         } else if ("build".equals(before[0]) && before.length == 1) {
             pool.addAll(Arrays.asList("--device", "--cloud"));

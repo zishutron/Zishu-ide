@@ -10,6 +10,7 @@ import com.android.tools.r8.Diagnostic;
 import com.android.tools.r8.DiagnosticsHandler;
 import com.android.tools.r8.OutputMode;
 import com.zishu.ide.core.build.BuildLog;
+import com.zishu.ide.core.ondevice.JarSplitter;
 import com.zishu.ide.core.ondevice.KotlinSupport;
 import com.zishu.ide.core.ondevice.OnDeviceTools;
 import com.zishu.ide.core.ondevice.ToolException;
@@ -41,6 +42,8 @@ import java.util.zip.ZipOutputStream;
 final class KotlinRunner {
     private static final String MAIN_CLASS = "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler";
     private static final int DEX_MIN_API = 26;
+    /** Jars bigger than this (compressed) are converted in several D8 runs of about this size each. */
+    private static final long SPLIT_BYTES = 4L * 1024 * 1024;
 
     private static ClassLoader loader;
     private static String loaderKey;
@@ -173,7 +176,7 @@ final class KotlinRunner {
     }
 
     private static String marker(List<File> jars) {
-        StringBuilder sb = new StringBuilder(KotlinSupport.VERSION);
+        StringBuilder sb = new StringBuilder(KotlinSupport.VERSION + " split-" + SPLIT_BYTES);
         for (File f : jars) {
             sb.append('\n').append(f.getName()).append(':').append(f.length());
         }
@@ -184,13 +187,99 @@ final class KotlinRunner {
         return new File(dir, String.format(java.util.Locale.US, "%02d-%s.dex.jar", index, jar.getName().replace(".jar", "")));
     }
 
-    /** Jar to dex-in-a-jar: D8 writes classes.dex, classes2.dex ... which are zipped into one file the class loader accepts. */
+    /**
+     * Jar to dex-in-a-jar. A big jar is cut into parts of about 4 MB (compressed); each part is converted by its own D8
+     * run so the phone never holds the whole compiler in memory at once. The dex files of all parts are numbered
+     * classes.dex, classes2.dex ... inside one jar, together with the jar's resources.
+     */
     private static void convert(final File jar, final List<File> allJars, final File androidJar, File out, File tmp, final BuildLog log)
             throws ToolException, IOException {
         if (!tmp.mkdirs() && !tmp.isDirectory()) {
             throw new IOException("Cannot create " + tmp);
         }
-        final File dexOut = tmp;
+        List<List<String>> parts = JarSplitter.plan(jar, SPLIT_BYTES);
+        if (parts.isEmpty()) {
+            throw new ToolException(jar.getName() + " contains no classes.");
+        }
+        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(out));
+        try {
+            int dexCount = 0;
+            long start = System.currentTimeMillis();
+            for (int p = 0; p < parts.size(); p++) {
+                File partJar = jar;
+                File partOut = new File(tmp, "out-" + p);
+                partOut.mkdirs();
+                if (parts.size() > 1) {
+                    partJar = new File(tmp, "part-" + p + ".jar");
+                    JarSplitter.write(jar, parts.get(p), partJar);
+                }
+                runD8(partJar, jar, allJars, androidJar, partOut, log);
+                File[] dexes = partOut.listFiles();
+                if (dexes == null || dexes.length == 0) {
+                    throw new ToolException("D8 produced no dex for part " + (p + 1) + " of " + jar.getName() + ".");
+                }
+                java.util.Arrays.sort(dexes, new java.util.Comparator<File>() {
+                    @Override
+                    public int compare(File a, File b) {
+                        return dexIndex(a.getName()) - dexIndex(b.getName());
+                    }
+                });
+                for (File d : dexes) {
+                    if (d.getName().endsWith(".dex")) {
+                        dexCount++;
+                        addFile(zos, dexCount == 1 ? "classes.dex" : "classes" + dexCount + ".dex", d);
+                    }
+                }
+                IoUtil.deleteRecursively(partOut);
+                if (partJar != jar) {
+                    partJar.delete();
+                }
+                if (parts.size() > 1) {
+                    long elapsed = (System.currentTimeMillis() - start) / 1000;
+                    long left = elapsed * (parts.size() - p - 1) / (p + 1);
+                    log.line("    part " + (p + 1) + " of " + parts.size() + " done (" + (100 * (p + 1) / parts.size()) + "%), "
+                            + com.zishu.ide.core.maven.DownloadMeter.duration(elapsed) + " elapsed"
+                            + (p + 1 < parts.size() ? ", about " + com.zishu.ide.core.maven.DownloadMeter.duration(left) + " left" : ""));
+                }
+                System.gc();
+            }
+            copyResources(jar, zos);
+        } finally {
+            zos.close();
+        }
+        IoUtil.deleteRecursively(tmp);
+        // Android 14+ refuses to load code from a writable file.
+        out.setReadOnly();
+    }
+
+    private static int dexIndex(String name) {
+        if (name.equals("classes.dex")) {
+            return 1;
+        }
+        try {
+            return Integer.parseInt(name.substring("classes".length(), name.length() - ".dex".length()));
+        } catch (RuntimeException e) {
+            return Integer.MAX_VALUE;
+        }
+    }
+
+    private static void addFile(ZipOutputStream zos, String entryName, File f) throws IOException {
+        zos.putNextEntry(new ZipEntry(entryName));
+        java.io.FileInputStream in = new java.io.FileInputStream(f);
+        try {
+            byte[] b = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(b)) > 0) {
+                zos.write(b, 0, n);
+            }
+        } finally {
+            in.close();
+        }
+        zos.closeEntry();
+    }
+
+    private static void runD8(final File program, final File wholeJar, final List<File> allJars, final File androidJar,
+                              final File dexOut, final BuildLog log) throws ToolException {
         try {
             BigThread.run(new Callable<Void>() {
                 @Override
@@ -212,12 +301,13 @@ final class KotlinRunner {
                     };
                     List<Path> classpath = new ArrayList<Path>();
                     for (File f : allJars) {
-                        if (!f.equals(jar)) {
+                        // a part of a split jar still sees all of its jar (supertypes live in the other parts)
+                        if (!program.equals(wholeJar) || !f.equals(wholeJar)) {
                             classpath.add(f.toPath());
                         }
                     }
                     D8Command cmd = D8Command.builder(handler)
-                            .addProgramFiles(jar.toPath())
+                            .addProgramFiles(program.toPath())
                             .addClasspathFiles(classpath)
                             .addLibraryFiles(androidJar.toPath())
                             .setMinApiLevel(DEX_MIN_API)
@@ -229,44 +319,13 @@ final class KotlinRunner {
                 }
             });
         } catch (CompilationFailedException e) {
-            throw new ToolException("D8 could not convert " + jar.getName() + ": " + e.getMessage(), e);
+            throw new ToolException("D8 could not convert " + wholeJar.getName() + ": " + e.getMessage(), e);
         } catch (OutOfMemoryError e) {
-            throw new ToolException("The phone ran out of memory converting " + jar.getName()
+            throw new ToolException("The phone ran out of memory converting " + wholeJar.getName()
                     + ". Close other apps and build again, or use the cloud build for Kotlin.");
         } catch (Exception e) {
-            throw new ToolException("D8 crashed converting " + jar.getName() + ": " + e, e);
+            throw new ToolException("D8 crashed converting " + wholeJar.getName() + ": " + e, e);
         }
-        File[] dexes = tmp.listFiles();
-        if (dexes == null || dexes.length == 0) {
-            throw new ToolException("D8 produced no dex for " + jar.getName() + ".");
-        }
-        java.util.Arrays.sort(dexes);
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(out));
-        try {
-            byte[] b = new byte[64 * 1024];
-            for (File d : dexes) {
-                if (!d.getName().endsWith(".dex")) {
-                    continue;
-                }
-                zos.putNextEntry(new ZipEntry(d.getName()));
-                java.io.FileInputStream in = new java.io.FileInputStream(d);
-                try {
-                    int n;
-                    while ((n = in.read(b)) > 0) {
-                        zos.write(b, 0, n);
-                    }
-                } finally {
-                    in.close();
-                }
-                zos.closeEntry();
-            }
-            copyResources(jar, zos);
-        } finally {
-            zos.close();
-        }
-        IoUtil.deleteRecursively(tmp);
-        // Android 14+ refuses to load code from a writable file.
-        out.setReadOnly();
     }
 
     /**

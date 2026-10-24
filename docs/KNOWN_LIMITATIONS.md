@@ -19,7 +19,7 @@
 ## On-phone build (new, unverified on a device)
 
 See docs/ONDEVICE.md. It supports simple Java projects only, needs Android 8+ and an arm64 phone, and its native parts
-have not been run by the author yet; run the self-test in Build tools. Kotlin and dependency-based projects still need the cloud build.
+have not been run by the author yet; run the self-test in Build tools. Dependency-based Java projects and simple Kotlin projects build on the phone; larger Kotlin projects are untested there and the cloud build is the fallback.
 
 ## Import, clone and signing
 

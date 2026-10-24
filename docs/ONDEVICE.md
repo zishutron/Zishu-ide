@@ -57,7 +57,9 @@ Verified by unit tests only with fake repositories and fake tools. Real download
 and installing the result have to be checked on a phone. Not supported: Gradle module metadata, version ranges, tools:node merge
 rules, resource shrinking, R8, annotation processing, Kotlin.
 
-## Kotlin (experimental, not yet verified on a phone)
+## Kotlin (experimental)
+
+Verified on a real phone: a native Kotlin project with one `.kt` file builds on the phone, installs and runs. First build on that phone: download of the compiler jars, about 15 minutes to convert the 57 MB compiler to dex (kept afterwards), then normal builds. Not verified yet: several Kotlin files, Kotlin mixed with Java, AndroidX/KTX libraries used from Kotlin, coroutines in app code, compile-error reporting, build time of later builds.
 
 If the module has `.kt` files in `src/main/java` or `src/main/kotlin`, the build:
 
@@ -68,3 +70,5 @@ If the module has `.kt` files in `src/main/java` or `src/main/kotlin`, the build
 5. compiles the Java files with ECJ with the Kotlin classes on the classpath, then dexes everything as usual.
 
 Limits: one fixed compiler version (1.9.24, the K1 front end: Kotlin 2.x-only language features will not compile, newer libraries are read with the metadata check skipped), no kapt/ksp, no Compose compiler plugin, a lot of RAM and time on the first build. If a stage fails, the build log names the stage; send it so the cause can be fixed. Cloud build remains the fallback.
+
+The compiler needs more than its POM lists: `stax-api` (javax.xml.stream), `kotlin-reflect` and `kotlinx-coroutines-core-jvm` are added explicitly, and empty stand-in classes are generated for JDK classes Android lacks (javax.swing.Icon and about 180 others). The compiler is told where its configuration is with a folder unpacked from its jar (`plugin-root`) and a class loader that points the compiler's own classes there.

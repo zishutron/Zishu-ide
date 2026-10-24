@@ -8,7 +8,7 @@ Builds run on the phone itself; a GitHub Actions cloud build is available as an 
 - Code editor with syntax highlighting, tabs, undo/redo, find and replace, file explorer and problems list
 - Built-in **Zishu Terminal** with IDE commands and an Android shell
 - Projects live in a visible `ZishuIDE` folder, so you can also manage them from a file manager
-- Builds on the phone: **Java 5 to 15, AndroidX / Maven libraries, Kotlin (experimental)**
+- Builds on the phone: **Java 5 to 15, AndroidX / Maven libraries, Kotlin 1.9.24**
 - Import a ZIP or **clone a GitHub repository**; the project is laid out for you
 - Sign APKs with **your own keystore**; keep the built APK in a visible `apk/` folder
 
@@ -19,7 +19,7 @@ Builds run on the phone itself; a GitHub Actions cloud build is available as an 
 | Account / internet | Not needed for plain Java; internet once for libraries and the Kotlin compiler | Your private GitHub repo + token |
 | Java projects | Yes (Java 15 by default, 5 to 15 supported) | Yes |
 | AndroidX and other Maven libraries (Google, Maven Central) | Yes: downloaded once, then kept on the phone | Yes |
-| Kotlin | Experimental (Kotlin 1.9.24, see below) | Yes |
+| Kotlin | Yes (Kotlin 1.9.24, see below) | Yes |
 | kapt / ksp / annotation processors, Compose, multi-module Gradle, NDK | No | Gradle decides |
 | Phone requirement | Android 8+, 64-bit ARM | Any supported phone |
 
@@ -34,8 +34,9 @@ package and align → apksig (v1 + v2 signature). Details: [docs/ONDEVICE.md](do
   `annotationProcessor`, dynamic versions such as `1.+`) are refused with a clear message instead of being guessed.
 - **Java levels.** 5 to 15 are compiled; a higher level in `build.gradle` is lowered to 15 and the build log says so. New projects
   and projects whose `build.gradle` sets no level use Java 15.
-- **Kotlin (experimental).** The official `kotlin-compiler-embeddable` 1.9.24 is downloaded from Maven Central, converted to dex
-  with D8 on the phone (once; it is large) and run in-process. It compiles `.kt` files together with your Java files. One fixed
+- **Kotlin.** The official `kotlin-compiler-embeddable` 1.9.24 is downloaded from Maven Central, converted to dex
+  with D8 on the phone (once; it is large) and run in-process. It compiles `.kt` files together with your Java files, including
+  projects with several Kotlin files and AndroidX/KTX libraries. One fixed
   compiler version: Kotlin 2.x-only language features, kapt/ksp and the Compose compiler plugin are not supported.
 - **First-run setup.** When the app opens it checks what is really on the phone. If the AndroidX starter libraries or the prepared
   Kotlin compiler are missing, it asks once whether to download them (**Download** opens the terminal and runs `zishu setup all`
@@ -72,15 +73,16 @@ Verified by running it on real phones (reported by the author while testing):
 - On-phone build, install and launch of generated Java projects and of a larger WebView app.
 - AndroidX / Maven libraries on the phone: annotation, core and AppCompat projects build (aapt2 with real AAR resources, D8 with
   real AndroidX); Java levels up to 15 build.
-- Kotlin on the phone: a native Kotlin project builds, installs and runs; a Kotlin compile error is reported with file, line
-  and message in the build log.
+- Kotlin on the phone: native Kotlin projects build, install and run, including a multi-file Kotlin app (a calculator) using
+  AndroidX and KTX libraries (62 libraries resolved, about 900 dex inputs, Java 11); a Kotlin compile error is reported with
+  file, line and message in the build log.
 - Terminal, visible `apk/` folder and download, signing with your own keystore, GitHub clone, ZIP import without Gradle files.
 - A stable CI signing key: new IDE APKs install over the previous one.
 
 Not verified yet:
 - The first-run download popup and `zishu setup` end to end, the Android 8 build-log scroll fix, and the Java 15 defaults on all
   phones.
-- Kotlin projects with several files, Kotlin mixed with Java, KTX libraries used from Kotlin, coroutines in app code.
+- Kotlin mixed with hand-written Java files, coroutines used directly in app code, kapt/ksp and Compose (not supported).
 - Lambdas and newer Java syntax across many projects; phones other than the ones tested; release signing of user apps.
 - Annotation processors, Compose, multi-module Gradle projects and NDK (not supported yet).
 

@@ -12,42 +12,63 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.SimpleJavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
-
 public class ClassStubsTest {
     @Rule
     public TemporaryFolder tmp = new TemporaryFolder();
 
+    /**
+     * A hand-written class file (unit tests are compiled against android.jar, which has no javax.tools): extends
+     * java.awt.Component, implements java.beans.PropertyChangeListener, a method descriptor with Color and Icon, a call of
+     * java.awt.Point.&lt;init&gt;, a plain class reference, and a string that only looks like a descriptor.
+     */
     private File compileToJar() throws Exception {
-        final String src = "package p; public class Uses extends java.awt.Component implements java.beans.PropertyChangeListener {"
-                + " public javax.swing.Icon icon(java.awt.Color c) { return null; }"
-                + " public Object make() { return new java.awt.Point(); }"
-                + " public void propertyChange(java.beans.PropertyChangeEvent e) {}"
-                + " public String s() { return \"Lnot/a/Type;\"; } }";
-        JavaCompiler c = ToolProvider.getSystemJavaCompiler();
-        File out = tmp.newFolder("classes");
-        StandardJavaFileManager fm = c.getStandardFileManager(null, null, null);
-        JavaFileObject f = new SimpleJavaFileObject(URI.create("string:///p/Uses.java"), JavaFileObject.Kind.SOURCE) {
-            @Override
-            public CharSequence getCharContent(boolean ignore) {
-                return src;
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream o = new java.io.DataOutputStream(bos);
+        o.writeInt(0xCAFEBABE);
+        o.writeShort(0);
+        o.writeShort(52);
+        o.writeShort(17);
+        String[] utf = {"p/Uses", null, "java/awt/Component", null, "java/beans/PropertyChangeListener", null,
+            "(Ljava/awt/Color;)Ljavax/swing/Icon;", "java/awt/Point", null, "<init>", "()V", null, null, "Lnot/a/Type;",
+            "java/beans/PropertyChangeEvent", null};
+        // 1 Utf8, 2 Class, 3 Utf8, 4 Class, 5 Utf8, 6 Class, 7 Utf8, 8 Utf8, 9 Class, 10 Utf8, 11 Utf8,
+        // 12 NameAndType, 13 Methodref, 14 Utf8, 15 Utf8, 16 Class
+        for (int i = 0; i < utf.length; i++) {
+            int slot = i + 1;
+            if (slot == 2 || slot == 4 || slot == 6 || slot == 9 || slot == 16) {
+                o.writeByte(7);
+                o.writeShort(slot - 1);
+            } else if (slot == 12) {
+                o.writeByte(12);
+                o.writeShort(10);
+                o.writeShort(11);
+            } else if (slot == 13) {
+                o.writeByte(10);
+                o.writeShort(9);
+                o.writeShort(12);
+            } else {
+                o.writeByte(1);
+                o.writeUTF(utf[i]);
             }
-        };
-        assertTrue(c.getTask(null, fm, null, Arrays.asList("-d", out.getPath(), "--release", "8"), null, Arrays.asList(f)).call());
+        }
+        o.writeShort(0x21);
+        o.writeShort(2);
+        o.writeShort(4);
+        o.writeShort(1);
+        o.writeShort(6);
+        o.writeShort(0);
+        o.writeShort(0);
+        o.writeShort(0);
+        o.flush();
         File jar = tmp.newFile("uses.jar");
         ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jar));
         zos.putNextEntry(new ZipEntry("p/Uses.class"));
-        zos.write(java.nio.file.Files.readAllBytes(new File(out, "p/Uses.class").toPath()));
+        zos.write(bos.toByteArray());
         zos.closeEntry();
         zos.close();
         return jar;

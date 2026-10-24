@@ -453,7 +453,7 @@ public final class ProjectImporter {
         c.compileSdk = Math.max(Defaults.COMPILE_SDK, target);
         c.versionCode = info.versionCode;
         c.versionName = info.versionName;
-        c.javaLevel = 8;
+        c.javaLevel = 15;
         if (info.packageName.length() == 0) {
             notes.add("The manifest has no package name; using " + c.applicationId + ". Change applicationId in "
                     + "app/build.gradle if you need another one.");

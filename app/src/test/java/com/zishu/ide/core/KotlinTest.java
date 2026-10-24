@@ -169,10 +169,12 @@ public class KotlinTest {
         job.sourceFiles = Arrays.asList(new File("/s/A.kt"), new File("/s/B.java"));
         job.outDir = new File("/o");
         job.javaLevel = 11;
+        job.kotlinHome = new File("/home/kt");
         List<String> a = KotlinSupport.arguments(job);
         assertTrue(a.toString(), a.containsAll(Arrays.asList("-no-stdlib", "-no-jdk", "-no-reflect")));
         assertEquals("11", a.get(a.indexOf("-jvm-target") + 1));
         assertEquals("/a/android.jar" + File.pathSeparator + "/b/stdlib.jar", a.get(a.indexOf("-classpath") + 1));
+        assertEquals("/home/kt", a.get(a.indexOf("-kotlin-home") + 1));
         assertEquals("/o", a.get(a.indexOf("-d") + 1));
         assertEquals("/s/B.java", a.get(a.size() - 1));
     }

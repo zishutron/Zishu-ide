@@ -243,6 +243,15 @@ public final class AndroidTools implements OnDeviceTools {
         KotlinRunner.compile(ctx, job, androidJar(), log);
     }
 
+    /** First-run setup: converts the Kotlin compiler for this phone ahead of the first Kotlin build. */
+    public void prepareKotlin(List<File> compilerJars, BuildLog log) throws ToolException {
+        KotlinRunner.prepareOnly(ctx, compilerJars, androidJar(), log);
+    }
+
+    public boolean kotlinPrepared(List<File> compilerJars) {
+        return KotlinRunner.isPrepared(ctx, compilerJars);
+    }
+
     @Override
     public void dex(final DexJob job, final BuildLog log) throws ToolException {
         final List<Path> programs = new ArrayList<Path>();

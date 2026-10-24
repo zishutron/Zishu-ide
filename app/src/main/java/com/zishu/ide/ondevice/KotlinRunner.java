@@ -53,7 +53,7 @@ final class KotlinRunner {
     }
 
     static void compile(Context ctx, final OnDeviceTools.KotlinJob job, File androidJar, final BuildLog log) throws ToolException {
-        ClassLoader cl = prepare(ctx, job, androidJar, log);
+        ClassLoader cl = prepare(ctx, job.compilerJars, androidJar, log);
         job.kotlinHome = new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
         ensurePluginRoot(new File(job.kotlinHome, "plugin-root"), job.compilerJars);
         final List<String> args = KotlinSupport.arguments(job);
@@ -73,6 +73,34 @@ final class KotlinRunner {
         if (!"OK".equals(exit)) {
             throw new ToolException("Kotlin compilation failed (" + exit + ").");
         }
+    }
+
+    /** Converts the compiler for this phone without compiling anything (first-run setup). */
+    static void prepareOnly(Context ctx, List<File> compilerJars, File androidJar, BuildLog log) throws ToolException {
+        prepare(ctx, compilerJars, androidJar, log);
+        ensurePluginRoot(new File(toolchainDir(ctx), "plugin-root"), compilerJars);
+    }
+
+    /** True when every compiler jar is converted and the stand-in classes exist; looks at the files only. */
+    static boolean isPrepared(Context ctx, List<File> compilerJars) {
+        try {
+            File dir = toolchainDir(ctx);
+            for (File jar : compilerJars) {
+                File ok = new File(dir, jar.getName() + ".ok");
+                String want = "split-" + SPLIT_BYTES + ":" + jar.length();
+                if (!dexJar(dir, jar).isFile() || !ok.isFile() || !want.equals(IoUtil.readUtf8(ok, 1024))) {
+                    return false;
+                }
+            }
+            File standIns = new File(dir, "jdk-stand-ins.ok");
+            return standIns.isFile() && ("stand-ins-1:" + marker(compilerJars)).equals(IoUtil.readUtf8(standIns, 1024 * 1024));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static File toolchainDir(Context ctx) {
+        return new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
     }
 
     private static int countKt(OnDeviceTools.KotlinJob job) {
@@ -119,10 +147,10 @@ final class KotlinRunner {
 
     // ------------------------------------------------------------------------ toolchain
 
-    private static synchronized ClassLoader prepare(Context ctx, OnDeviceTools.KotlinJob job, File androidJar, BuildLog log)
+    private static synchronized ClassLoader prepare(Context ctx, List<File> compilerJars, File androidJar, BuildLog log)
             throws ToolException {
         File dir = new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
-        String key = marker(job.compilerJars);
+        String key = marker(compilerJars);
         if (loader != null && key.equals(loaderKey)) {
             return loader;
         }
@@ -131,9 +159,9 @@ final class KotlinRunner {
             if (!dir.isDirectory() && !dir.mkdirs()) {
                 throw new ToolException("Cannot create " + dir);
             }
-            migrateLegacy(dir, job.compilerJars);
+            migrateLegacy(dir, compilerJars);
             boolean converted = false;
-            for (File jar : job.compilerJars) {
+            for (File jar : compilerJars) {
                 File out = dexJar(dir, jar);
                 File ok = new File(dir, jar.getName() + ".ok");
                 String want = "split-" + SPLIT_BYTES + ":" + jar.length();
@@ -146,12 +174,12 @@ final class KotlinRunner {
                     ok.delete();
                     out.delete();
                     log.line("  converting " + jar.getName() + " (" + IoUtil.formatSize(jar.length()) + ")");
-                    convert(jar, job.compilerJars, androidJar, out, new File(dir, "tmp-" + jar.getName()), log);
+                    convert(jar, compilerJars, androidJar, out, new File(dir, "tmp-" + jar.getName()), log);
                     IoUtil.writeUtf8Atomic(ok, want);
                 }
                 dexJars.add(out);
             }
-            File standIns = ensureStandIns(dir, job.compilerJars, androidJar, log);
+            File standIns = ensureStandIns(dir, compilerJars, androidJar, log);
             if (standIns != null) {
                 dexJars.add(standIns);
             }

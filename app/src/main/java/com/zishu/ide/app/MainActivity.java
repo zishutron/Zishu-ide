@@ -38,6 +38,10 @@ public final class MainActivity extends BaseActivity {
 
     private static boolean storagePrompted;
     private static boolean movePrompted;
+    /** The "download build resources" question is asked at most once per app start (Later = ask again next time). */
+    private static boolean resourcesAsked;
+    private static boolean resourcesReady;
+    private boolean resourceCheckRunning;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private LinearLayout recentBox;
@@ -64,20 +68,23 @@ public final class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         refresh();
-        checkStorage();
+        if (!checkStorage()) {
+            checkResources();
+        }
     }
 
     /** Projects live in the visible ZishuIDE folder, so ask for the storage permission once per app start. */
-    private void checkStorage() {
+    private boolean checkStorage() {
         if (!prefs.sharedStorage()) {
-            return;
+            return false;
         }
         if (!StorageAccess.granted(this)) {
             if (!storagePrompted) {
                 storagePrompted = true;
                 askStorage();
+                return true;
             }
-            return;
+            return false;
         }
         final java.io.File priv = App.privateWorkspaceDir(this);
         int n = 0;
@@ -89,8 +96,10 @@ public final class MainActivity extends BaseActivity {
                 }
             }
         }
+        boolean asked = false;
         if (n > 0 && !movePrompted) {
             movePrompted = true;
+            asked = true;
             final int count = n;
             Ui.dialog(this, pal).setTitle("Move projects to the ZishuIDE folder?")
                     .setMessage(count + " project" + (count == 1 ? " is" : "s are") + " still stored privately inside the app. "
@@ -104,6 +113,89 @@ public final class MainActivity extends BaseActivity {
                         }
                     }).show();
         }
+        return asked;
+    }
+
+    /**
+     * Looks at what is really on the phone (offline, in the background) and, only when AndroidX libraries or the Kotlin
+     * compiler are missing, asks once whether to download them now.
+     */
+    private void checkResources() {
+        if (resourcesAsked || resourcesReady || resourceCheckRunning) {
+            return;
+        }
+        resourceCheckRunning = true;
+        final android.content.Context app = getApplicationContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final List<String> missing = new ArrayList<String>();
+                boolean checked = false;
+                try {
+                    com.zishu.ide.ondevice.AndroidTools tools = new com.zishu.ide.ondevice.AndroidTools(app);
+                    if (tools.status().available) {
+                        checked = true;
+                        com.zishu.ide.core.maven.MavenDependencies deps = Engines.mavenDependencies(app);
+                        if (!com.zishu.ide.core.ondevice.ResourcePacks.androidxReady(deps)) {
+                            missing.add("androidx");
+                        }
+                        boolean kotlinOk = false;
+                        try {
+                            List<File> jars = com.zishu.ide.core.ondevice.KotlinSupport.resolveCompiler(deps.offline(),
+                                    new com.zishu.ide.core.build.BuildLog(com.zishu.ide.core.build.BuildListener.NONE));
+                            kotlinOk = tools.kotlinPrepared(jars);
+                        } catch (IOException notDownloaded) {
+                            kotlinOk = false;
+                        }
+                        if (!kotlinOk) {
+                            missing.add("kotlin");
+                        }
+                    }
+                } catch (RuntimeException ignored) {
+                    // no question when the check itself cannot run
+                    missing.clear();
+                }
+                final boolean allReady = checked && missing.isEmpty();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        resourceCheckRunning = false;
+                        if (allReady) {
+                            resourcesReady = true;
+                        }
+                        if (!missing.isEmpty() && !resourcesAsked && !isFinishing()) {
+                            resourcesAsked = true;
+                            askResources(missing);
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void askResources(List<String> missing) {
+        StringBuilder m = new StringBuilder("Zishu IDE builds apps on this phone. To build apps that use AndroidX or Kotlin it "
+                + "needs a few resources. They are downloaded once and then kept on the phone.\n");
+        if (missing.contains("androidx")) {
+            m.append("\n\u2022 AndroidX libraries (AppCompat, Core KTX, ConstraintLayout, Material)");
+        }
+        if (missing.contains("kotlin")) {
+            m.append("\n\u2022 Kotlin compiler (about 65 MB to download, then prepared for this phone; "
+                    + "the preparation can take 10 to 15 minutes)");
+        }
+        m.append("\n\nThe download needs an internet connection. Keep the app open and the screen on while it runs. "
+                + "Plain Java apps without libraries build without these resources.");
+        Ui.dialog(this, pal).setTitle("Download build resources")
+                .setMessage(m.toString())
+                .setNegativeButton("Later", null)
+                .setPositiveButton("Download", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        Intent i = new Intent(MainActivity.this, TerminalActivity.class);
+                        i.putExtra(TerminalActivity.EXTRA_RUN, "zishu setup all");
+                        startActivity(i);
+                    }
+                }).show();
     }
 
     private void askStorage() {

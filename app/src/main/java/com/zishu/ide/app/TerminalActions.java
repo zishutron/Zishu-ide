@@ -453,6 +453,114 @@ final class TerminalActions {
         say(Level.DIM, "Install with  zishu install  or save with  zishu download " + out.getName());
     }
 
+    // ------------------------------------------------------------------ setup (AndroidX + Kotlin)
+
+    private final AtomicBoolean settingUp = new AtomicBoolean(false);
+
+    /** Downloads the AndroidX starter libraries and prepares the Kotlin compiler, printing progress. */
+    String setupResources(final String what) {
+        if (!settingUp.compareAndSet(false, true)) {
+            return "The setup is already running.";
+        }
+        final Context app = act.getApplicationContext();
+        if (!"status".equals(what)) {
+            act.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    doSetup(app, what);
+                } catch (Throwable e) {
+                    say(Level.ERROR, "Setup stopped: " + e);
+                } finally {
+                    settingUp.set(false);
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            act.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                        }
+                    });
+                }
+            }
+        }).start();
+        return null;
+    }
+
+    private void doSetup(Context app, String what) {
+        final com.zishu.ide.core.maven.MavenDependencies deps = Engines.mavenDependencies(app);
+        final com.zishu.ide.ondevice.AndroidTools tools = new com.zishu.ide.ondevice.AndroidTools(app);
+        com.zishu.ide.core.build.BuildLog log = new com.zishu.ide.core.build.BuildLog(new com.zishu.ide.core.build.BuildListener() {
+            @Override
+            public void onStage(com.zishu.ide.core.build.BuildStage stage, String detail) {
+            }
+
+            @Override
+            public void onLog(String line) {
+                say(Level.DIM, line);
+            }
+
+            @Override
+            public void onProgress(int percent) {
+            }
+        });
+        boolean wantX = "all".equals(what) || "androidx".equals(what);
+        boolean wantK = "all".equals(what) || "kotlin".equals(what);
+        if ("status".equals(what)) {
+            boolean x = com.zishu.ide.core.ondevice.ResourcePacks.androidxReady(deps);
+            say(x ? Level.OK : Level.WARN, "AndroidX libraries: " + (x ? "downloaded" : "not downloaded yet"));
+            String k;
+            try {
+                java.util.List<File> jars = com.zishu.ide.core.ondevice.KotlinSupport.resolveCompiler(deps.offline(),
+                        new com.zishu.ide.core.build.BuildLog(com.zishu.ide.core.build.BuildListener.NONE));
+                k = tools.kotlinPrepared(jars) ? "ready" : "downloaded, not prepared for this phone yet";
+            } catch (IOException e) {
+                k = "not downloaded yet";
+            }
+            say("ready".equals(k) ? Level.OK : Level.WARN, "Kotlin compiler: " + k);
+            return;
+        }
+        com.zishu.ide.core.build.BuildEngine.Status st = tools.status();
+        if (!st.available) {
+            say(Level.ERROR, "Builds on this phone are not available, so there is nothing to prepare: " + st.reason);
+            return;
+        }
+        com.zishu.ide.core.maven.DownloadReporter.attach(deps.cache(), new com.zishu.ide.core.maven.DownloadReporter.Sink() {
+            @Override
+            public void line(String text) {
+                say(Level.DIM, text);
+            }
+        });
+        say(Level.PLAIN, "Keep this screen open. The screen is kept awake while this runs.");
+        try {
+            if (wantX) {
+                say(Level.HEAD, "AndroidX libraries");
+                com.zishu.ide.core.ondevice.ResourcePacks.Done d = com.zishu.ide.core.ondevice.ResourcePacks.downloadAndroidx(deps);
+                say(Level.OK, "AndroidX libraries ready: " + d.libraries + " libraries (" + d.aars + " AAR, " + d.jars + " JAR).");
+            }
+            if (wantK) {
+                say(Level.HEAD, "Kotlin compiler");
+                java.util.List<File> jars = com.zishu.ide.core.ondevice.KotlinSupport.resolveCompiler(deps, log);
+                if (tools.kotlinPrepared(jars)) {
+                    say(Level.OK, "Kotlin compiler was already prepared.");
+                } else {
+                    say(Level.PLAIN, "Preparing the compiler for this phone. This can take 10 to 15 minutes the first time.");
+                    tools.prepareKotlin(jars, log);
+                    say(Level.OK, "Kotlin compiler ready.");
+                }
+            }
+            say(Level.OK, "Done. Builds that use AndroidX or Kotlin will no longer wait for downloads.");
+        } catch (com.zishu.ide.core.ondevice.ToolException e) {
+            say(Level.ERROR, e.getMessage());
+            say(Level.DIM, "Run  zishu setup  again to continue.");
+        } catch (IOException e) {
+            say(Level.ERROR, e.getMessage());
+            say(Level.DIM, "Run  zishu setup  again to continue.");
+        } catch (OutOfMemoryError e) {
+            say(Level.ERROR, "The phone ran out of memory. Close other apps and run  zishu setup  again.");
+        }
+    }
+
     // ------------------------------------------------------------------ clone
 
     String cloneRepo(final String repoName, final String ref, final String projectName, boolean useToken) {

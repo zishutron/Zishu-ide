@@ -198,7 +198,7 @@ public final class NewProjectActivity extends BaseActivity {
         addGap(page, cMin.view);
         addGap(page, cTarget.view);
         addGap(page, cCompile.view);
-        cJava = Ui.choice(this, pal, "Java language level", new String[]{"Java 8", "Java 11", "Java 17"}, 2, null);
+        cJava = Ui.choice(this, pal, "Java language level", new String[]{"Java 8", "Java 11", "Java 15", "Java 17"}, 2, null);
         addGap(page, cJava.view);
         LinearLayout info = Ui.banner(this, pal, R.drawable.ic_chip, pal.primary, "Build system: Gradle",
                 "Android Gradle Plugin " + Defaults.AGP_VERSION + ", Gradle " + Defaults.GRADLE_VERSION + ", JDK " + Defaults.JDK_VERSION
@@ -416,7 +416,7 @@ public final class NewProjectActivity extends BaseActivity {
         c.minSdk = 21 + cMin.index();
         c.targetSdk = 21 + cTarget.index();
         c.compileSdk = 21 + cCompile.index();
-        c.javaLevel = new int[]{8, 11, 17}[cJava.index()];
+        c.javaLevel = new int[]{8, 11, 15, 17}[cJava.index()];
         c.language = t == ProjectType.NATIVE_KOTLIN ? Language.KOTLIN : Language.JAVA;
         if (t.isNative()) {
             c.initialActivity = fActivity.value().trim();

@@ -148,7 +148,25 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
         logView.setTextIsSelectable(true);
         logView.setPadding(dp(12), dp(12), dp(12), dp(12));
         logView.setBackground(Ui.rounded(this, pal.codeBg, pal.outline, 12));
-        logScroll = new ScrollView(this);
+        // The log box sits inside the page's own ScrollView. Older Android versions (8) let the page take the touch
+        // away, so the whole screen scrolled instead of the log. The log asks its parent to leave the gesture alone.
+        logScroll = new ScrollView(this) {
+            @Override
+            public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+                int a = ev.getActionMasked();
+                if (a == android.view.MotionEvent.ACTION_DOWN) {
+                    if (getParent() != null) {
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                } else if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) {
+                    if (getParent() != null) {
+                        getParent().requestDisallowInterceptTouchEvent(false);
+                    }
+                }
+                return super.dispatchTouchEvent(ev);
+            }
+        };
+        logScroll.setVerticalScrollBarEnabled(true);
         logScroll.addView(logView);
         page.addView(logScroll, Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(260)));
 

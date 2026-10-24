@@ -41,6 +41,8 @@ import java.util.List;
  */
 public final class TerminalActivity extends BaseActivity implements TerminalState.View {
     public static final String EXTRA_PROJECT = "project";
+    /** A command line to run as soon as the terminal opens (for example "zishu setup all"). */
+    public static final String EXTRA_RUN = "run";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TerminalState state;
@@ -93,6 +95,18 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
         historyPos = state.history().size();
         buildScreen();
         render();
+        final String autoRun = getIntent().getStringExtra(EXTRA_RUN);
+        if (autoRun != null && savedInstanceState == null) {
+            input.post(new Runnable() {
+                @Override
+                public void run() {
+                    state.submit(autoRun, ide);
+                    historyPos = state.history().size();
+                    updatePrompt();
+                    scrollToBottom();
+                }
+            });
+        }
     }
 
     @Override
@@ -549,6 +563,11 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
         @Override
         public String cloneRepo(String repo, String ref, String projectName, boolean useToken) {
             return actions.cloneRepo(repo, ref, projectName, useToken);
+        }
+
+        @Override
+        public String setupResources(String what) {
+            return actions.setupResources(what);
         }
     }
 

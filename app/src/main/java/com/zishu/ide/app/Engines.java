@@ -47,14 +47,18 @@ public final class Engines {
         return new LocalBuildEngine(Toolchain.fromEnvironment(), 30L * 60 * 1000);
     }
 
-    public static OnDeviceBuildEngine onDevice(Context c) {
+    /** Library repositories (Google, Maven Central) and the folder where downloads are kept on the phone. */
+    public static com.zishu.ide.core.maven.MavenDependencies mavenDependencies(Context c) {
         java.util.List<com.zishu.ide.core.maven.MavenRepo> repos = new java.util.ArrayList<com.zishu.ide.core.maven.MavenRepo>();
         repos.add(new com.zishu.ide.core.maven.HttpMavenRepo("google()", com.zishu.ide.core.maven.HttpMavenRepo.GOOGLE));
         repos.add(new com.zishu.ide.core.maven.HttpMavenRepo("mavenCentral()", com.zishu.ide.core.maven.HttpMavenRepo.CENTRAL));
         File libs = new File(c.getFilesDir(), "libraries");
-        com.zishu.ide.core.maven.MavenDependencies deps = new com.zishu.ide.core.maven.MavenDependencies(
+        return new com.zishu.ide.core.maven.MavenDependencies(
                 new com.zishu.ide.core.maven.MavenCache(new File(libs, "maven"), repos), new File(libs, "unpacked"));
-        return new OnDeviceBuildEngine(new AndroidTools(c), new File(c.getCacheDir(), "ondevice"), deps);
+    }
+
+    public static OnDeviceBuildEngine onDevice(Context c) {
+        return new OnDeviceBuildEngine(new AndroidTools(c), new File(c.getCacheDir(), "ondevice"), mavenDependencies(c));
     }
 
     /** The engine the user's choice and the phone's abilities select: "device", "cloud" or automatic. */

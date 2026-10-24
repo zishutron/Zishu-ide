@@ -33,6 +33,11 @@ public final class HttpMavenRepo implements MavenRepo {
 
     @Override
     public boolean download(String path, File dest) throws IOException {
+        return download(path, dest, null);
+    }
+
+    /** Same as {@link #download(String, File)} and reports progress while the bytes arrive. */
+    public boolean download(String path, File dest, DownloadProgress progress) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();
         try {
             c.setConnectTimeout(20000);
@@ -55,6 +60,13 @@ public final class HttpMavenRepo implements MavenRepo {
             } catch (java.security.NoSuchAlgorithmException e) {
                 throw new IOException("SHA-1 is not available");
             }
+            long expected0 = -1;
+            try {
+                String len = c.getHeaderField("Content-Length");
+                expected0 = len == null ? -1 : Long.parseLong(len.trim());
+            } catch (NumberFormatException e) {
+                expected0 = -1;
+            }
             InputStream in = c.getInputStream();
             OutputStream out = new FileOutputStream(dest);
             try {
@@ -68,6 +80,12 @@ public final class HttpMavenRepo implements MavenRepo {
                     }
                     sha1.update(buf, 0, n);
                     out.write(buf, 0, n);
+                    if (progress != null) {
+                        progress.bytes(path, total, expected0);
+                    }
+                }
+                if (progress != null) {
+                    progress.bytes(path, total, total);
                 }
             } finally {
                 try {

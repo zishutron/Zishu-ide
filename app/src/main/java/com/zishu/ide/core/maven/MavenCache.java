@@ -13,6 +13,7 @@ public final class MavenCache implements Resolver.Fetcher {
     }
 
     private Listener listener;
+    private DownloadProgress progress;
     private final File dir;
     private final List<MavenRepo> repos;
 
@@ -23,6 +24,11 @@ public final class MavenCache implements Resolver.Fetcher {
 
     public void setListener(Listener l) {
         this.listener = l;
+    }
+
+    /** Progress of every library download over HTTPS (percent, size); optional. */
+    public void setProgress(DownloadProgress p) {
+        this.progress = p;
     }
 
     public File dir() {
@@ -57,7 +63,9 @@ public final class MavenCache implements Resolver.Fetcher {
         IOException last = null;
         for (MavenRepo r : repos) {
             try {
-                if (r.download(path, part)) {
+                boolean got = progress != null && r instanceof HttpMavenRepo && (path.endsWith(".aar") || path.endsWith(".jar"))
+                        ? ((HttpMavenRepo) r).download(path, part, progress) : r.download(path, part);
+                if (got) {
                     if (!part.renameTo(local)) {
                         throw new IOException("Cannot store " + local.getName());
                     }

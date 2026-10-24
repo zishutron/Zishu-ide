@@ -157,9 +157,9 @@ public final class ConfigValidator {
             }
         }
 
-        if (c.javaLevel != 8 && c.javaLevel != 11 && c.javaLevel != 17) {
-            r.add(Issue.error("java-level", "Java level " + c.javaLevel + " is not supported. Supported levels: 8, 11, 17.",
-                    "Select Java 8, 11 or 17."));
+        if (c.javaLevel != 8 && c.javaLevel != 11 && c.javaLevel != 15 && c.javaLevel != 17) {
+            r.add(Issue.error("java-level", "Java level " + c.javaLevel + " is not supported. Supported levels: 8, 11, 15, 17.",
+                    "Select Java 8, 11, 15 or 17."));
         } else if (c.javaLevel > 8) {
             r.add(Issue.info("java-level-note",
                     "Java " + c.javaLevel + " language syntax is compiled and desugared by the Android Gradle Plugin. "

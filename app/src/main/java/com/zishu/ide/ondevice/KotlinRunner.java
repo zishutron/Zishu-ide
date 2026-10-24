@@ -10,6 +10,7 @@ import com.android.tools.r8.Diagnostic;
 import com.android.tools.r8.DiagnosticsHandler;
 import com.android.tools.r8.OutputMode;
 import com.zishu.ide.core.build.BuildLog;
+import com.zishu.ide.core.ondevice.ClassStubs;
 import com.zishu.ide.core.ondevice.JarSplitter;
 import com.zishu.ide.core.ondevice.KotlinSupport;
 import com.zishu.ide.core.ondevice.OnDeviceTools;
@@ -150,6 +151,10 @@ final class KotlinRunner {
                 }
                 dexJars.add(out);
             }
+            File standIns = ensureStandIns(dir, job.compilerJars, androidJar, log);
+            if (standIns != null) {
+                dexJars.add(standIns);
+            }
             log.line(converted ? "Kotlin compiler converted and cached." : "Kotlin compiler: using the converted copy on this phone.");
         } catch (IOException e) {
             throw new ToolException("Could not prepare the Kotlin compiler: " + e.getMessage(), e);
@@ -166,6 +171,55 @@ final class KotlinRunner {
         loader = new CompilerLoader(path.toString(), parent, new File(dir, "plugin-root"));
         loaderKey = key;
         return loader;
+    }
+
+    /**
+     * Empty stand-in classes for JDK classes the compiler mentions but Android lacks (javax.swing.Icon ...), converted to a
+     * dex jar that is last on the class path, so real classes always win. Rebuilt only when the compiler jars change.
+     */
+    private static File ensureStandIns(File dir, List<File> jars, File androidJar, BuildLog log) throws ToolException, IOException {
+        File out = new File(dir, "jdk-stand-ins.dex.jar");
+        File ok = new File(dir, "jdk-stand-ins.ok");
+        String key = "stand-ins-1:" + marker(jars);
+        if (ok.isFile() && key.equals(IoUtil.readUtf8(ok, 1024 * 1024))) {
+            return out.isFile() ? out : null;
+        }
+        log.line("Scanning the Kotlin compiler for JDK classes that Android does not have...");
+        java.util.Map<String, Boolean> stubs = ClassStubs.scan(jars, androidJar);
+        ok.delete();
+        out.delete();
+        if (!stubs.isEmpty()) {
+            File tmp = new File(dir, "tmp-stand-ins");
+            if (tmp.exists()) {
+                IoUtil.deleteRecursively(tmp);
+            }
+            tmp.mkdirs();
+            File jar = new File(tmp, "stand-ins.jar");
+            ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jar));
+            try {
+                for (java.util.Map.Entry<String, Boolean> e : stubs.entrySet()) {
+                    zos.putNextEntry(new ZipEntry(e.getKey() + ".class"));
+                    zos.write(ClassStubs.stubClass(e.getKey(), e.getValue()));
+                    zos.closeEntry();
+                }
+            } finally {
+                zos.close();
+            }
+            convert(jar, java.util.Collections.singletonList(jar), androidJar, out, new File(dir, "tmp-stand-ins-dex"), log);
+            IoUtil.deleteRecursively(tmp);
+            StringBuilder names = new StringBuilder();
+            int n = 0;
+            for (String k : stubs.keySet()) {
+                if (n++ < 6) {
+                    names.append(names.length() == 0 ? "" : ", ").append(k.replace('/', '.'));
+                }
+            }
+            log.line("Created " + stubs.size() + " empty stand-in class(es), for example " + names + ".");
+        } else {
+            log.line("No missing JDK classes found.");
+        }
+        IoUtil.writeUtf8Atomic(ok, key);
+        return out.isFile() ? out : null;
     }
 
     /** The first version cached NN-name.dex.jar plus one READY marker; keep those converted jars instead of redoing 15 minutes. */

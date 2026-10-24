@@ -20,6 +20,11 @@ public final class MavenDependencies {
         return new File(unpackRoot, a.group.replace('.', '_') + "__" + a.artifact + "__" + a.version);
     }
 
+    /** The same cache and unpack folder but no repositories: anything not already downloaded is simply missing. */
+    public MavenDependencies offline() {
+        return new MavenDependencies(new MavenCache(cache.dir(), new java.util.ArrayList<MavenRepo>()), unpackRoot);
+    }
+
     public Resolver resolver() {
         return new Resolver(cache, cache.repoNames());
     }

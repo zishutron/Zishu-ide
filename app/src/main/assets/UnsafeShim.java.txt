@@ -1,0 +1,1041 @@
+package sun.misc;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+/**
+ * Zishu IDE compatibility shim for the Kotlin 2.x compiler on Android. The compiler (IntelliJ core) looks up the JDK 8 methods of
+ * sun.misc.Unsafe with method handles and fails when one is missing (Android has no copyMemory with an object base).
+ * This class has the same name and the JDK 8 method set; every call is forwarded to the phone's real Unsafe, and the few
+ * methods the phone lacks are emulated. It is loaded only for the compiler (see KotlinRunner), never by the IDE itself.
+ */
+public final class Unsafe {
+    public static final int INVALID_FIELD_OFFSET = -1;
+    private static final Object FENCE = new Object();
+    private static int FENCE_COUNT;
+    private static final Object REAL;
+    private static final Unsafe theUnsafe;
+    private static Method M0;
+    private static Method M1;
+    private static Method M2;
+    private static Method M3;
+    private static Method M4;
+    private static Method M5;
+    private static Method M6;
+    private static Method M7;
+    private static Method M8;
+    private static Method M9;
+    private static Method M10;
+    private static Method M11;
+    private static Method M12;
+    private static Method M13;
+    private static Method M14;
+    private static Method M15;
+    private static Method M16;
+    private static Method M17;
+    private static Method M18;
+    private static Method M19;
+    private static Method M20;
+    private static Method M21;
+    private static Method M22;
+    private static Method M23;
+    private static Method M24;
+    private static Method M25;
+    private static Method M26;
+    private static Method M27;
+    private static Method M28;
+    private static Method M29;
+    private static Method M30;
+    private static Method M31;
+    private static Method M32;
+    private static Method M33;
+    private static Method M34;
+    private static Method M35;
+    private static Method M36;
+    private static Method M37;
+    private static Method M38;
+    private static Method M39;
+    private static Method M40;
+    private static Method M41;
+    private static Method M42;
+    private static Method M43;
+    private static Method M44;
+    private static Method M45;
+    private static Method M46;
+    private static Method M47;
+    private static Method M48;
+    private static Method M49;
+    private static Method M50;
+    private static Method M51;
+    private static Method M52;
+    private static Method M53;
+    private static Method M54;
+    private static Method M55;
+    private static Method M56;
+    private static Method M57;
+    private static Method M58;
+    private static Method M59;
+    private static Method M60;
+    private static Method M61;
+    private static Method M62;
+    private static Method M63;
+    private static Method M64;
+    private static Method M65;
+    private static Method M66;
+    private static Method M67;
+    private static Method M68;
+    private static Method M69;
+    private static Method M70;
+    private static Method M71;
+    private static Method M72;
+    private static Method M73;
+    private static Method M74;
+    private static Method M75;
+    private static Method M76;
+    private static Method M77;
+    private static Method M78;
+    private static Method M79;
+    private static Method M80;
+    private static Method M81;
+    private static Method M82;
+    private static Method M83;
+    private static Method M84;
+    private static Method M85;
+    private static Method M86;
+    private static Method M87;
+    private static Method M88;
+    private static Method M89;
+    public static final int ARRAY_BOOLEAN_BASE_OFFSET;
+    public static final int ARRAY_BYTE_BASE_OFFSET;
+    public static final int ARRAY_SHORT_BASE_OFFSET;
+    public static final int ARRAY_CHAR_BASE_OFFSET;
+    public static final int ARRAY_INT_BASE_OFFSET;
+    public static final int ARRAY_LONG_BASE_OFFSET;
+    public static final int ARRAY_FLOAT_BASE_OFFSET;
+    public static final int ARRAY_DOUBLE_BASE_OFFSET;
+    public static final int ARRAY_OBJECT_BASE_OFFSET;
+    public static final int ARRAY_BOOLEAN_INDEX_SCALE;
+    public static final int ARRAY_BYTE_INDEX_SCALE;
+    public static final int ARRAY_SHORT_INDEX_SCALE;
+    public static final int ARRAY_CHAR_INDEX_SCALE;
+    public static final int ARRAY_INT_INDEX_SCALE;
+    public static final int ARRAY_LONG_INDEX_SCALE;
+    public static final int ARRAY_FLOAT_INDEX_SCALE;
+    public static final int ARRAY_DOUBLE_INDEX_SCALE;
+    public static final int ARRAY_OBJECT_INDEX_SCALE;
+    public static final int ADDRESS_SIZE;
+
+    static {
+        Object real;
+        Class<?> realClass;
+        try {
+            ClassLoader boot = ClassLoader.getSystemClassLoader().getParent();
+            if (boot == null) {
+                boot = String.class.getClassLoader();
+            }
+            realClass = Class.forName("sun.misc.Unsafe", true, boot);
+            java.lang.reflect.Field f = realClass.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            real = f.get(null);
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+        REAL = real;
+        M0 = find(realClass, "getInt", Object.class, long.class);
+        M1 = find(realClass, "putInt", Object.class, long.class, int.class);
+        M2 = find(realClass, "getIntVolatile", Object.class, long.class);
+        M3 = find(realClass, "putIntVolatile", Object.class, long.class, int.class);
+        M4 = find(realClass, "getLong", Object.class, long.class);
+        M5 = find(realClass, "putLong", Object.class, long.class, long.class);
+        M6 = find(realClass, "getLongVolatile", Object.class, long.class);
+        M7 = find(realClass, "putLongVolatile", Object.class, long.class, long.class);
+        M8 = find(realClass, "getObject", Object.class, long.class);
+        M9 = find(realClass, "putObject", Object.class, long.class, Object.class);
+        M10 = find(realClass, "getObjectVolatile", Object.class, long.class);
+        M11 = find(realClass, "putObjectVolatile", Object.class, long.class, Object.class);
+        M12 = find(realClass, "getBoolean", Object.class, long.class);
+        M13 = find(realClass, "putBoolean", Object.class, long.class, boolean.class);
+        M14 = find(realClass, "getBooleanVolatile", Object.class, long.class);
+        M15 = find(realClass, "putBooleanVolatile", Object.class, long.class, boolean.class);
+        M16 = find(realClass, "getByte", Object.class, long.class);
+        M17 = find(realClass, "putByte", Object.class, long.class, byte.class);
+        M18 = find(realClass, "getByteVolatile", Object.class, long.class);
+        M19 = find(realClass, "putByteVolatile", Object.class, long.class, byte.class);
+        M20 = find(realClass, "getShort", Object.class, long.class);
+        M21 = find(realClass, "putShort", Object.class, long.class, short.class);
+        M22 = find(realClass, "getShortVolatile", Object.class, long.class);
+        M23 = find(realClass, "putShortVolatile", Object.class, long.class, short.class);
+        M24 = find(realClass, "getChar", Object.class, long.class);
+        M25 = find(realClass, "putChar", Object.class, long.class, char.class);
+        M26 = find(realClass, "getCharVolatile", Object.class, long.class);
+        M27 = find(realClass, "putCharVolatile", Object.class, long.class, char.class);
+        M28 = find(realClass, "getFloat", Object.class, long.class);
+        M29 = find(realClass, "putFloat", Object.class, long.class, float.class);
+        M30 = find(realClass, "getFloatVolatile", Object.class, long.class);
+        M31 = find(realClass, "putFloatVolatile", Object.class, long.class, float.class);
+        M32 = find(realClass, "getDouble", Object.class, long.class);
+        M33 = find(realClass, "putDouble", Object.class, long.class, double.class);
+        M34 = find(realClass, "getDoubleVolatile", Object.class, long.class);
+        M35 = find(realClass, "putDoubleVolatile", Object.class, long.class, double.class);
+        M36 = find(realClass, "getByte", long.class);
+        M37 = find(realClass, "putByte", long.class, byte.class);
+        M38 = find(realClass, "getShort", long.class);
+        M39 = find(realClass, "putShort", long.class, short.class);
+        M40 = find(realClass, "getChar", long.class);
+        M41 = find(realClass, "putChar", long.class, char.class);
+        M42 = find(realClass, "getInt", long.class);
+        M43 = find(realClass, "putInt", long.class, int.class);
+        M44 = find(realClass, "getLong", long.class);
+        M45 = find(realClass, "putLong", long.class, long.class);
+        M46 = find(realClass, "getFloat", long.class);
+        M47 = find(realClass, "putFloat", long.class, float.class);
+        M48 = find(realClass, "getDouble", long.class);
+        M49 = find(realClass, "putDouble", long.class, double.class);
+        M50 = find(realClass, "getAddress", long.class);
+        M51 = find(realClass, "putAddress", long.class, long.class);
+        M52 = find(realClass, "allocateMemory", long.class);
+        M53 = find(realClass, "reallocateMemory", long.class, long.class);
+        M54 = find(realClass, "setMemory", Object.class, long.class, long.class, byte.class);
+        M55 = find(realClass, "setMemory", long.class, long.class, byte.class);
+        M56 = find(realClass, "copyMemory", Object.class, long.class, Object.class, long.class, long.class);
+        M57 = find(realClass, "copyMemory", long.class, long.class, long.class);
+        M58 = find(realClass, "freeMemory", long.class);
+        M59 = find(realClass, "staticFieldOffset", java.lang.reflect.Field.class);
+        M60 = find(realClass, "objectFieldOffset", java.lang.reflect.Field.class);
+        M61 = find(realClass, "staticFieldBase", java.lang.reflect.Field.class);
+        M62 = find(realClass, "shouldBeInitialized", Class.class);
+        M63 = find(realClass, "ensureClassInitialized", Class.class);
+        M64 = find(realClass, "arrayBaseOffset", Class.class);
+        M65 = find(realClass, "arrayIndexScale", Class.class);
+        M66 = find(realClass, "addressSize");
+        M67 = find(realClass, "pageSize");
+        M68 = find(realClass, "allocateInstance", Class.class);
+        M69 = find(realClass, "monitorEnter", Object.class);
+        M70 = find(realClass, "monitorExit", Object.class);
+        M71 = find(realClass, "tryMonitorEnter", Object.class);
+        M72 = find(realClass, "throwException", Throwable.class);
+        M73 = find(realClass, "compareAndSwapObject", Object.class, long.class, Object.class, Object.class);
+        M74 = find(realClass, "compareAndSwapInt", Object.class, long.class, int.class, int.class);
+        M75 = find(realClass, "compareAndSwapLong", Object.class, long.class, long.class, long.class);
+        M76 = find(realClass, "putOrderedObject", Object.class, long.class, Object.class);
+        M77 = find(realClass, "putOrderedInt", Object.class, long.class, int.class);
+        M78 = find(realClass, "putOrderedLong", Object.class, long.class, long.class);
+        M79 = find(realClass, "unpark", Object.class);
+        M80 = find(realClass, "park", boolean.class, long.class);
+        M81 = find(realClass, "getLoadAverage", double[].class, int.class);
+        M82 = find(realClass, "getAndAddInt", Object.class, long.class, int.class);
+        M83 = find(realClass, "getAndAddLong", Object.class, long.class, long.class);
+        M84 = find(realClass, "getAndSetInt", Object.class, long.class, int.class);
+        M85 = find(realClass, "getAndSetLong", Object.class, long.class, long.class);
+        M86 = find(realClass, "getAndSetObject", Object.class, long.class, Object.class);
+        M87 = find(realClass, "loadFence");
+        M88 = find(realClass, "storeFence");
+        M89 = find(realClass, "fullFence");
+        theUnsafe = new Unsafe();
+        ARRAY_BOOLEAN_BASE_OFFSET = base(boolean[].class);
+        ARRAY_BYTE_BASE_OFFSET = base(byte[].class);
+        ARRAY_SHORT_BASE_OFFSET = base(short[].class);
+        ARRAY_CHAR_BASE_OFFSET = base(char[].class);
+        ARRAY_INT_BASE_OFFSET = base(int[].class);
+        ARRAY_LONG_BASE_OFFSET = base(long[].class);
+        ARRAY_FLOAT_BASE_OFFSET = base(float[].class);
+        ARRAY_DOUBLE_BASE_OFFSET = base(double[].class);
+        ARRAY_OBJECT_BASE_OFFSET = base(Object[].class);
+        ARRAY_BOOLEAN_INDEX_SCALE = scale(boolean[].class);
+        ARRAY_BYTE_INDEX_SCALE = scale(byte[].class);
+        ARRAY_SHORT_INDEX_SCALE = scale(short[].class);
+        ARRAY_CHAR_INDEX_SCALE = scale(char[].class);
+        ARRAY_INT_INDEX_SCALE = scale(int[].class);
+        ARRAY_LONG_INDEX_SCALE = scale(long[].class);
+        ARRAY_FLOAT_INDEX_SCALE = scale(float[].class);
+        ARRAY_DOUBLE_INDEX_SCALE = scale(double[].class);
+        ARRAY_OBJECT_INDEX_SCALE = scale(Object[].class);
+        ADDRESS_SIZE = theUnsafe.addressSize();
+    }
+
+    private Unsafe() {
+    }
+
+    public static Unsafe getUnsafe() {
+        return theUnsafe;
+    }
+
+    private static int base(Class<?> c) {
+        return theUnsafe.arrayBaseOffset(c);
+    }
+
+    private static int scale(Class<?> c) {
+        return theUnsafe.arrayIndexScale(c);
+    }
+
+    private static Method find(Class<?> c, String name, Class<?>... types) {
+        try {
+            return c.getMethod(name, types);
+        } catch (NoSuchMethodException e) {
+            return null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static Object inv(Method m, Object... a) {
+        try {
+            return m.invoke(REAL, a);
+        } catch (InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) {
+                throw (RuntimeException) t;
+            }
+            if (t instanceof Error) {
+                throw (Error) t;
+            }
+            throw new RuntimeException(t);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static UnsupportedOperationException missing(String name) {
+        return new UnsupportedOperationException("sun.misc.Unsafe." + name + " is not available on this phone");
+    }
+
+    public int getInt(Object a0, long a1) {
+        Method m = M0;
+        if (m == null) {
+            throw missing("getInt");
+        }
+        return ((Integer) inv(m, a0, a1)).intValue();
+    }
+
+    public void putInt(Object a0, long a1, int a2) {
+        Method m = M1;
+        if (m == null) {
+            throw missing("putInt");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public int getIntVolatile(Object a0, long a1) {
+        Method m = M2;
+        if (m == null) {
+            throw missing("getIntVolatile");
+        }
+        return ((Integer) inv(m, a0, a1)).intValue();
+    }
+
+    public void putIntVolatile(Object a0, long a1, int a2) {
+        Method m = M3;
+        if (m == null) {
+            throw missing("putIntVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public long getLong(Object a0, long a1) {
+        Method m = M4;
+        if (m == null) {
+            throw missing("getLong");
+        }
+        return ((Long) inv(m, a0, a1)).longValue();
+    }
+
+    public void putLong(Object a0, long a1, long a2) {
+        Method m = M5;
+        if (m == null) {
+            throw missing("putLong");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public long getLongVolatile(Object a0, long a1) {
+        Method m = M6;
+        if (m == null) {
+            throw missing("getLongVolatile");
+        }
+        return ((Long) inv(m, a0, a1)).longValue();
+    }
+
+    public void putLongVolatile(Object a0, long a1, long a2) {
+        Method m = M7;
+        if (m == null) {
+            throw missing("putLongVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public Object getObject(Object a0, long a1) {
+        Method m = M8;
+        if (m == null) {
+            throw missing("getObject");
+        }
+        return inv(m, a0, a1);
+    }
+
+    public void putObject(Object a0, long a1, Object a2) {
+        Method m = M9;
+        if (m == null) {
+            throw missing("putObject");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public Object getObjectVolatile(Object a0, long a1) {
+        Method m = M10;
+        if (m == null) {
+            throw missing("getObjectVolatile");
+        }
+        return inv(m, a0, a1);
+    }
+
+    public void putObjectVolatile(Object a0, long a1, Object a2) {
+        Method m = M11;
+        if (m == null) {
+            throw missing("putObjectVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public boolean getBoolean(Object a0, long a1) {
+        Method m = M12;
+        if (m == null) {
+            throw missing("getBoolean");
+        }
+        return ((Boolean) inv(m, a0, a1)).booleanValue();
+    }
+
+    public void putBoolean(Object a0, long a1, boolean a2) {
+        Method m = M13;
+        if (m == null) {
+            throw missing("putBoolean");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public boolean getBooleanVolatile(Object a0, long a1) {
+        Method m = M14;
+        if (m == null) {
+            throw missing("getBooleanVolatile");
+        }
+        return ((Boolean) inv(m, a0, a1)).booleanValue();
+    }
+
+    public void putBooleanVolatile(Object a0, long a1, boolean a2) {
+        Method m = M15;
+        if (m == null) {
+            throw missing("putBooleanVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public byte getByte(Object a0, long a1) {
+        Method m = M16;
+        if (m == null) {
+            throw missing("getByte");
+        }
+        return ((Byte) inv(m, a0, a1)).byteValue();
+    }
+
+    public void putByte(Object a0, long a1, byte a2) {
+        Method m = M17;
+        if (m == null) {
+            throw missing("putByte");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public byte getByteVolatile(Object a0, long a1) {
+        Method m = M18;
+        if (m == null) {
+            throw missing("getByteVolatile");
+        }
+        return ((Byte) inv(m, a0, a1)).byteValue();
+    }
+
+    public void putByteVolatile(Object a0, long a1, byte a2) {
+        Method m = M19;
+        if (m == null) {
+            throw missing("putByteVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public short getShort(Object a0, long a1) {
+        Method m = M20;
+        if (m == null) {
+            throw missing("getShort");
+        }
+        return ((Short) inv(m, a0, a1)).shortValue();
+    }
+
+    public void putShort(Object a0, long a1, short a2) {
+        Method m = M21;
+        if (m == null) {
+            throw missing("putShort");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public short getShortVolatile(Object a0, long a1) {
+        Method m = M22;
+        if (m == null) {
+            throw missing("getShortVolatile");
+        }
+        return ((Short) inv(m, a0, a1)).shortValue();
+    }
+
+    public void putShortVolatile(Object a0, long a1, short a2) {
+        Method m = M23;
+        if (m == null) {
+            throw missing("putShortVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public char getChar(Object a0, long a1) {
+        Method m = M24;
+        if (m == null) {
+            throw missing("getChar");
+        }
+        return ((Character) inv(m, a0, a1)).charValue();
+    }
+
+    public void putChar(Object a0, long a1, char a2) {
+        Method m = M25;
+        if (m == null) {
+            throw missing("putChar");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public char getCharVolatile(Object a0, long a1) {
+        Method m = M26;
+        if (m == null) {
+            throw missing("getCharVolatile");
+        }
+        return ((Character) inv(m, a0, a1)).charValue();
+    }
+
+    public void putCharVolatile(Object a0, long a1, char a2) {
+        Method m = M27;
+        if (m == null) {
+            throw missing("putCharVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public float getFloat(Object a0, long a1) {
+        Method m = M28;
+        if (m == null) {
+            throw missing("getFloat");
+        }
+        return ((Float) inv(m, a0, a1)).floatValue();
+    }
+
+    public void putFloat(Object a0, long a1, float a2) {
+        Method m = M29;
+        if (m == null) {
+            throw missing("putFloat");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public float getFloatVolatile(Object a0, long a1) {
+        Method m = M30;
+        if (m == null) {
+            throw missing("getFloatVolatile");
+        }
+        return ((Float) inv(m, a0, a1)).floatValue();
+    }
+
+    public void putFloatVolatile(Object a0, long a1, float a2) {
+        Method m = M31;
+        if (m == null) {
+            throw missing("putFloatVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public double getDouble(Object a0, long a1) {
+        Method m = M32;
+        if (m == null) {
+            throw missing("getDouble");
+        }
+        return ((Double) inv(m, a0, a1)).doubleValue();
+    }
+
+    public void putDouble(Object a0, long a1, double a2) {
+        Method m = M33;
+        if (m == null) {
+            throw missing("putDouble");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public double getDoubleVolatile(Object a0, long a1) {
+        Method m = M34;
+        if (m == null) {
+            throw missing("getDoubleVolatile");
+        }
+        return ((Double) inv(m, a0, a1)).doubleValue();
+    }
+
+    public void putDoubleVolatile(Object a0, long a1, double a2) {
+        Method m = M35;
+        if (m == null) {
+            throw missing("putDoubleVolatile");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public byte getByte(long a0) {
+        Method m = M36;
+        if (m == null) {
+            throw missing("getByte");
+        }
+        return ((Byte) inv(m, a0)).byteValue();
+    }
+
+    public void putByte(long a0, byte a1) {
+        Method m = M37;
+        if (m == null) {
+            throw missing("putByte");
+        }
+        inv(m, a0, a1);
+    }
+
+    public short getShort(long a0) {
+        Method m = M38;
+        if (m == null) {
+            throw missing("getShort");
+        }
+        return ((Short) inv(m, a0)).shortValue();
+    }
+
+    public void putShort(long a0, short a1) {
+        Method m = M39;
+        if (m == null) {
+            throw missing("putShort");
+        }
+        inv(m, a0, a1);
+    }
+
+    public char getChar(long a0) {
+        Method m = M40;
+        if (m == null) {
+            throw missing("getChar");
+        }
+        return ((Character) inv(m, a0)).charValue();
+    }
+
+    public void putChar(long a0, char a1) {
+        Method m = M41;
+        if (m == null) {
+            throw missing("putChar");
+        }
+        inv(m, a0, a1);
+    }
+
+    public int getInt(long a0) {
+        Method m = M42;
+        if (m == null) {
+            throw missing("getInt");
+        }
+        return ((Integer) inv(m, a0)).intValue();
+    }
+
+    public void putInt(long a0, int a1) {
+        Method m = M43;
+        if (m == null) {
+            throw missing("putInt");
+        }
+        inv(m, a0, a1);
+    }
+
+    public long getLong(long a0) {
+        Method m = M44;
+        if (m == null) {
+            throw missing("getLong");
+        }
+        return ((Long) inv(m, a0)).longValue();
+    }
+
+    public void putLong(long a0, long a1) {
+        Method m = M45;
+        if (m == null) {
+            throw missing("putLong");
+        }
+        inv(m, a0, a1);
+    }
+
+    public float getFloat(long a0) {
+        Method m = M46;
+        if (m == null) {
+            throw missing("getFloat");
+        }
+        return ((Float) inv(m, a0)).floatValue();
+    }
+
+    public void putFloat(long a0, float a1) {
+        Method m = M47;
+        if (m == null) {
+            throw missing("putFloat");
+        }
+        inv(m, a0, a1);
+    }
+
+    public double getDouble(long a0) {
+        Method m = M48;
+        if (m == null) {
+            throw missing("getDouble");
+        }
+        return ((Double) inv(m, a0)).doubleValue();
+    }
+
+    public void putDouble(long a0, double a1) {
+        Method m = M49;
+        if (m == null) {
+            throw missing("putDouble");
+        }
+        inv(m, a0, a1);
+    }
+
+    public long getAddress(long a0) {
+        Method m = M50;
+        if (m == null) {
+            throw missing("getAddress");
+        }
+        return ((Long) inv(m, a0)).longValue();
+    }
+
+    public void putAddress(long a0, long a1) {
+        Method m = M51;
+        if (m == null) {
+            throw missing("putAddress");
+        }
+        inv(m, a0, a1);
+    }
+
+    public long allocateMemory(long a0) {
+        Method m = M52;
+        if (m == null) {
+            throw missing("allocateMemory");
+        }
+        return ((Long) inv(m, a0)).longValue();
+    }
+
+    public long reallocateMemory(long a0, long a1) {
+        Method m = M53;
+        if (m == null) {
+            throw missing("reallocateMemory");
+        }
+        return ((Long) inv(m, a0, a1)).longValue();
+    }
+
+    public void setMemory(Object a0, long a1, long a2, byte a3) {
+        Method m = M54;
+        if (m == null) {
+            throw missing("setMemory");
+        }
+        inv(m, a0, a1, a2, a3);
+    }
+
+    public void setMemory(long a0, long a1, byte a2) {
+        Method m = M55;
+        if (m == null) {
+            throw missing("setMemory");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public void copyMemory(Object a0, long a1, Object a2, long a3, long n) {
+        Method m = M56;
+        if (m == null) {
+        if (n <= 0) { return; }
+        boolean backward = a2 == a0 && a3 > a1 && a3 < a1 + n;
+        for (long i = 0; i < n; i++) {
+            long k = backward ? n - 1 - i : i;
+            byte b = a0 == null ? getByte(a1 + k) : getByte(a0, a1 + k);
+            if (a2 == null) { putByte(a3 + k, b); } else { putByte(a2, a3 + k, b); }
+        }
+            return;
+        }
+        inv(m, a0, a1, a2, a3, n);
+    }
+
+    public void copyMemory(long a0, long a1, long a2) {
+        Method m = M57;
+        if (m == null) {
+            throw missing("copyMemory");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public void freeMemory(long a0) {
+        Method m = M58;
+        if (m == null) {
+            throw missing("freeMemory");
+        }
+        inv(m, a0);
+    }
+
+    public long staticFieldOffset(java.lang.reflect.Field a0) {
+        Method m = M59;
+        if (m == null) {
+            throw missing("staticFieldOffset");
+        }
+        return ((Long) inv(m, a0)).longValue();
+    }
+
+    public long objectFieldOffset(java.lang.reflect.Field a0) {
+        Method m = M60;
+        if (m == null) {
+            throw missing("objectFieldOffset");
+        }
+        return ((Long) inv(m, a0)).longValue();
+    }
+
+    public Object staticFieldBase(java.lang.reflect.Field a0) {
+        Method m = M61;
+        if (m == null) {
+            throw missing("staticFieldBase");
+        }
+        return inv(m, a0);
+    }
+
+    public boolean shouldBeInitialized(Class<?> a0) {
+        Method m = M62;
+        if (m == null) {
+            throw missing("shouldBeInitialized");
+        }
+        return ((Boolean) inv(m, a0)).booleanValue();
+    }
+
+    public void ensureClassInitialized(Class<?> a0) {
+        Method m = M63;
+        if (m == null) {
+            throw missing("ensureClassInitialized");
+        }
+        inv(m, a0);
+    }
+
+    public int arrayBaseOffset(Class<?> a0) {
+        Method m = M64;
+        if (m == null) {
+            throw missing("arrayBaseOffset");
+        }
+        return ((Integer) inv(m, a0)).intValue();
+    }
+
+    public int arrayIndexScale(Class<?> a0) {
+        Method m = M65;
+        if (m == null) {
+            throw missing("arrayIndexScale");
+        }
+        return ((Integer) inv(m, a0)).intValue();
+    }
+
+    public int addressSize() {
+        Method m = M66;
+        if (m == null) {
+            throw missing("addressSize");
+        }
+        return ((Integer) inv(m)).intValue();
+    }
+
+    public int pageSize() {
+        Method m = M67;
+        if (m == null) {
+            throw missing("pageSize");
+        }
+        return ((Integer) inv(m)).intValue();
+    }
+
+    public Object allocateInstance(Class<?> a0) {
+        Method m = M68;
+        if (m == null) {
+            throw missing("allocateInstance");
+        }
+        return inv(m, a0);
+    }
+
+    public void monitorEnter(Object a0) {
+        Method m = M69;
+        if (m == null) {
+            throw missing("monitorEnter");
+        }
+        inv(m, a0);
+    }
+
+    public void monitorExit(Object a0) {
+        Method m = M70;
+        if (m == null) {
+            throw missing("monitorExit");
+        }
+        inv(m, a0);
+    }
+
+    public boolean tryMonitorEnter(Object a0) {
+        Method m = M71;
+        if (m == null) {
+        throw new UnsupportedOperationException("sun.misc.Unsafe.tryMonitorEnter");
+        }
+        return ((Boolean) inv(m, a0)).booleanValue();
+    }
+
+    public void throwException(Throwable a0) {
+        Method m = M72;
+        if (m == null) {
+            throw missing("throwException");
+        }
+        inv(m, a0);
+    }
+
+    public boolean compareAndSwapObject(Object a0, long a1, Object a2, Object a3) {
+        Method m = M73;
+        if (m == null) {
+            throw missing("compareAndSwapObject");
+        }
+        return ((Boolean) inv(m, a0, a1, a2, a3)).booleanValue();
+    }
+
+    public boolean compareAndSwapInt(Object a0, long a1, int a2, int a3) {
+        Method m = M74;
+        if (m == null) {
+            throw missing("compareAndSwapInt");
+        }
+        return ((Boolean) inv(m, a0, a1, a2, a3)).booleanValue();
+    }
+
+    public boolean compareAndSwapLong(Object a0, long a1, long a2, long a3) {
+        Method m = M75;
+        if (m == null) {
+            throw missing("compareAndSwapLong");
+        }
+        return ((Boolean) inv(m, a0, a1, a2, a3)).booleanValue();
+    }
+
+    public void putOrderedObject(Object a0, long a1, Object a2) {
+        Method m = M76;
+        if (m == null) {
+            throw missing("putOrderedObject");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public void putOrderedInt(Object a0, long a1, int a2) {
+        Method m = M77;
+        if (m == null) {
+            throw missing("putOrderedInt");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public void putOrderedLong(Object a0, long a1, long a2) {
+        Method m = M78;
+        if (m == null) {
+            throw missing("putOrderedLong");
+        }
+        inv(m, a0, a1, a2);
+    }
+
+    public void unpark(Object a0) {
+        Method m = M79;
+        if (m == null) {
+            throw missing("unpark");
+        }
+        inv(m, a0);
+    }
+
+    public void park(boolean a0, long a1) {
+        Method m = M80;
+        if (m == null) {
+            throw missing("park");
+        }
+        inv(m, a0, a1);
+    }
+
+    public int getLoadAverage(double[] a0, int a1) {
+        Method m = M81;
+        if (m == null) {
+            throw missing("getLoadAverage");
+        }
+        return ((Integer) inv(m, a0, a1)).intValue();
+    }
+
+    public int getAndAddInt(Object a0, long a1, int a2) {
+        Method m = M82;
+        if (m == null) {
+        int v;
+        do { v = getIntVolatile(a0, a1); } while (!compareAndSwapInt(a0, a1, v, v + a2));
+        return v;
+        }
+        return ((Integer) inv(m, a0, a1, a2)).intValue();
+    }
+
+    public long getAndAddLong(Object a0, long a1, long a2) {
+        Method m = M83;
+        if (m == null) {
+        long v;
+        do { v = getLongVolatile(a0, a1); } while (!compareAndSwapLong(a0, a1, v, v + a2));
+        return v;
+        }
+        return ((Long) inv(m, a0, a1, a2)).longValue();
+    }
+
+    public int getAndSetInt(Object a0, long a1, int a2) {
+        Method m = M84;
+        if (m == null) {
+        int v;
+        do { v = getIntVolatile(a0, a1); } while (!compareAndSwapInt(a0, a1, v, a2));
+        return v;
+        }
+        return ((Integer) inv(m, a0, a1, a2)).intValue();
+    }
+
+    public long getAndSetLong(Object a0, long a1, long a2) {
+        Method m = M85;
+        if (m == null) {
+        long v;
+        do { v = getLongVolatile(a0, a1); } while (!compareAndSwapLong(a0, a1, v, a2));
+        return v;
+        }
+        return ((Long) inv(m, a0, a1, a2)).longValue();
+    }
+
+    public Object getAndSetObject(Object a0, long a1, Object a2) {
+        Method m = M86;
+        if (m == null) {
+        Object v;
+        do { v = getObjectVolatile(a0, a1); } while (!compareAndSwapObject(a0, a1, v, a2));
+        return v;
+        }
+        return inv(m, a0, a1, a2);
+    }
+
+    public void loadFence() {
+        Method m = M87;
+        if (m == null) {
+        synchronized (FENCE) { FENCE_COUNT++; }
+            return;
+        }
+        inv(m);
+    }
+
+    public void storeFence() {
+        Method m = M88;
+        if (m == null) {
+        synchronized (FENCE) { FENCE_COUNT++; }
+            return;
+        }
+        inv(m);
+    }
+
+    public void fullFence() {
+        Method m = M89;
+        if (m == null) {
+        synchronized (FENCE) { FENCE_COUNT++; }
+            return;
+        }
+        inv(m);
+    }
+}

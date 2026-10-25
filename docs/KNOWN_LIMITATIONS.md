@@ -2,7 +2,7 @@
 
 ## On-phone build (see [ONDEVICE.md](ONDEVICE.md))
 - Needs Android 8+ and a 64-bit ARM phone. Other phones use the cloud build.
-- **Supported:** Java projects (Java 5 to 15, default 15), Kotlin 1.9.24 projects, Maven/Google libraries including AndroidX,
+- **Supported:** Java projects (Java 5 to 15, default 15), Kotlin projects (2.0.21 by default, 1.9.24 for projects that ask for Kotlin 1.x), Maven/Google libraries including AndroidX,
   version catalogs, BOMs, `files()` / `fileTree`. Verified on real phones, including a multi-file Kotlin app with AndroidX and
   KTX libraries.
 - **Not supported (refused with a clear message, use the cloud build):**
@@ -14,7 +14,7 @@
 - **Java level:** the bundled compiler (ECJ 3.25.0) compiles up to Java 15. A higher level in `build.gradle` is lowered to 15 and
   the build log says so. Newer language features (records finalised after 15, pattern matching for switch, and so on) are not
   available. Lambdas and newer syntax have been tested on a few projects only.
-- **Kotlin:** one fixed compiler version (1.9.24, K1). Kotlin 2.x-only language features are not supported. Coroutines used
+- **Kotlin:** two fixed compiler versions: 2.0.21 (K2, default) and 1.9.24 (used when the project declares a Kotlin 1.x plugin). Language features newer than 2.0 are not supported. 2.0.21 has been added but is not yet verified on a phone. Coroutines used
   directly in app code and Kotlin mixed with your own Java files are not tested yet. The compiler runs in-process on the
   phone, so a very large Kotlin project may be slow or run out of memory.
 - **First use needs internet and time.** Libraries and the Kotlin compiler are downloaded once and kept on the phone; the Kotlin

@@ -15,7 +15,7 @@ Last updated after on-phone testing by the author. "Verified" means it was run, 
 - AndroidX / Maven libraries: annotation, core and AppCompat projects build; aapt2 compiles real AAR resources and D8 dexes
   real AndroidX libraries.
 - Java levels up to 15 build; Java 15 is the default for new projects and for projects whose `build.gradle` sets no level.
-- Kotlin 1.9.24 on the phone: native Kotlin projects build, install and run, including a multi-file Kotlin calculator using
+- Kotlin 1.9.24 on the phone (Kotlin 2.0.21, now the default compiler, is added but not yet run on a phone): native Kotlin projects build, install and run, including a multi-file Kotlin calculator using
   AndroidX and KTX libraries (62 libraries resolved, about 900 dex inputs, Java 11). Kotlin compile errors are reported with
   file, line and message.
 - First launch: the "download build resources" popup appears when resources are missing; **Download** opens the terminal and
@@ -24,6 +24,7 @@ Last updated after on-phone testing by the author. "Verified" means it was run, 
 - Terminal, visible `apk/` folder and download, signing with your own keystore, GitHub clone, ZIP import without Gradle files.
 
 ## Not verified yet
+- Kotlin 2.0.21 (K2) on a phone: download, conversion and a real build.
 - Kotlin mixed with hand-written Java files, and coroutines used directly in app code.
 - Lambdas and newer Java syntax across many projects; phones other than the ones tested.
 - Release signing of user apps; the cloud build against a real repository after the latest changes.

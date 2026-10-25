@@ -23,7 +23,7 @@ Zishu IDE can build simple Java Android projects **on the phone**, with no GitHu
 ## Requirements and limits
 
 - Android 8.0+ (API 26) and a 64-bit ARM phone. The IDE APK is arm64-only because of the bundled aapt2.
-- Java, plus experimental Kotlin (see below). No multi-module projects (`project(':x')`), no NDK code, no annotation processors (kapt/ksp/annotationProcessor are refused by name).
+- Java, plus Kotlin (see below). No multi-module projects (`project(':x')`), no NDK code, no annotation processors (kapt/ksp/annotationProcessor are refused by name).
 - Projects are compiled against API 34. APIs newer than that will not compile.
 - A debug-signed APK cannot update an app installed with a different key. Uninstalling Zishu IDE deletes its signing key.
 - Java lambdas / method references are untested with this ECJ + android.jar combination.
@@ -57,19 +57,21 @@ Verified by unit tests only with fake repositories and fake tools. Real download
 and installing the result have to be checked on a phone. Not supported: Gradle module metadata, version ranges, tools:node merge
 rules, resource shrinking, R8, annotation processing, Kotlin.
 
-## Kotlin (experimental)
+## Kotlin
 
-Verified on a real phone: a native Kotlin project with one `.kt` file builds on the phone, installs and runs. First build on that phone: download of the compiler jars, about 15 minutes to convert the 57 MB compiler to dex (kept afterwards), then normal builds. Not verified yet: several Kotlin files, Kotlin mixed with Java, AndroidX/KTX libraries used from Kotlin, coroutines in app code, compile-error reporting, build time of later builds.
+Two compiler versions are known: **2.0.21** (K2, the default) and **1.9.24** (K1). A project that declares a Kotlin 1.x plugin or `kotlin` version in its Gradle files (root or app `build.gradle`, or `libs.versions.toml`) is compiled with 1.9.24; any other project, including one that declares nothing, uses 2.0.21. The log line `Kotlin: N file(s), compiled with Kotlin X` says which one was used. Each version has its own compiler download and its own converted copy under `files/toolchains/kotlin-<version>`.
+
+Verified on real phones with **1.9.24**: native Kotlin projects with one and with several `.kt` files, AndroidX/KTX libraries used from Kotlin, compile errors reported with file, line and message. **2.0.21 has been added but not yet run on a phone**; the first build or `zishu setup` downloads and converts the 2.0.21 compiler, and a failure there is reported in the build log. Not verified yet: Kotlin mixed with hand-written Java, coroutines in app code.
 
 If the module has `.kt` files in `src/main/java` or `src/main/kotlin`, the build:
 
-1. adds `org.jetbrains.kotlin:kotlin-stdlib:1.9.24` as an `implementation` dependency (unless declared),
-2. downloads `kotlin-compiler-embeddable:1.9.24` and its dependencies from Maven Central (once),
-3. converts those jars to dex with D8 (once, kept in `files/toolchains/kotlin-1.9.24`) and loads them with a `DexClassLoader`,
+1. adds `org.jetbrains.kotlin:kotlin-stdlib:<compiler version>` as an `implementation` dependency (unless declared),
+2. downloads `kotlin-compiler-embeddable:<version>` and its dependencies from Maven Central (once),
+3. converts those jars to dex with D8 (once, kept in `files/toolchains/kotlin-<version>`) and loads them with a `DexClassLoader`,
 4. runs `K2JVMCompiler` with `-no-jdk -no-stdlib -no-reflect` against android.jar + your libraries; the Java files and the generated `R.java` are passed too (read for symbols),
 5. compiles the Java files with ECJ with the Kotlin classes on the classpath, then dexes everything as usual.
 
-Limits: one fixed compiler version (1.9.24, the K1 front end: Kotlin 2.x-only language features will not compile, newer libraries are read with the metadata check skipped), no kapt/ksp, no Compose compiler plugin, a lot of RAM and time on the first build. If a stage fails, the build log names the stage; send it so the cause can be fixed. Cloud build remains the fallback.
+Limits: the compiler versions are fixed (2.0.21 and 1.9.24; language features newer than 2.0 will not compile, newer libraries are read with the metadata check skipped), no kapt/ksp, no Compose compiler plugin, a lot of RAM and time on the first build. If a stage fails, the build log names the stage; send it so the cause can be fixed. Cloud build remains the fallback.
 
 The compiler needs more than its POM lists: `stax-api` (javax.xml.stream), `kotlin-reflect` and `kotlinx-coroutines-core-jvm` are added explicitly, and empty stand-in classes are generated for JDK classes Android lacks (javax.swing.Icon and about 180 others). The compiler is told where its configuration is with a folder unpacked from its jar (`plugin-root`) and a class loader that points the compiler's own classes there.
 

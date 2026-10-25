@@ -67,6 +67,8 @@ public interface OnDeviceTools {
         public String moduleName = "app";
         /** An existing folder passed as -kotlin-home (the compiler cannot find its own home when it runs from dex). */
         public File kotlinHome;
+        /** The compiler version in use (see KotlinSupport.versionFor). */
+        public String version = KotlinSupport.DEFAULT_VERSION;
     }
 
     final class DexJob {
@@ -91,7 +93,7 @@ public interface OnDeviceTools {
     /** Compiles Java to class files in {@code outDir}. */
     void compileJava(JavaJob job, BuildLog log) throws ToolException;
 
-    /** Compiles Kotlin to class files in {@code outDir}. Experimental: the first call converts the compiler for this phone. */
+    /** Compiles Kotlin to class files in {@code outDir}. The first call converts the compiler for this phone. */
     void compileKotlin(KotlinJob job, BuildLog log) throws ToolException;
 
     /** Converts class files and library jars to one or more classes*.dex in {@code outDir}. */

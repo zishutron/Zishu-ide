@@ -11,12 +11,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Kotlin on the phone (experimental). The compiler is the official kotlin-compiler-embeddable, downloaded once from
- * Maven Central; the Android side converts it to dex and runs it. One fixed version is used: 1.9.24 (the K1 front end),
- * which reads metadata of newer Kotlin libraries but cannot compile Kotlin 2.x-only language features.
+ * Kotlin on the phone. The compiler is the official kotlin-compiler-embeddable, downloaded once from Maven Central; the
+ * Android side converts it to dex and runs it. Two versions are known: 2.0.21 (the K2 compiler, the default) and 1.9.24
+ * (the K1 compiler, used for projects that ask for a Kotlin 1.x plugin).
  */
 public final class KotlinSupport {
-    public static final String VERSION = "1.9.24";
+    public static final String DEFAULT_VERSION = "2.0.21";
+    public static final String LEGACY_VERSION = "1.9.24";
+    /** The version used when a project does not ask for a Kotlin 1.x compiler. */
+    public static final String VERSION = DEFAULT_VERSION;
     public static final String COMPILER = "org.jetbrains.kotlin:kotlin-compiler-embeddable:" + VERSION;
     /** The compiler reads its XML configuration through StAX (javax.xml.stream), which Android does not have. */
     public static final String STAX_API = "javax.xml.stream:stax-api:1.0-2";
@@ -33,6 +36,31 @@ public final class KotlinSupport {
 
     public static Coordinate stdlib() {
         return Coordinate.parse(STDLIB);
+    }
+
+    public static Coordinate stdlib(String version) {
+        return Coordinate.parse("org.jetbrains.kotlin:kotlin-stdlib:" + version);
+    }
+
+    /**
+     * Picks the compiler for a project from its Gradle text (root and app build files, version catalog): a Kotlin plugin or
+     * kotlin version that starts with 1. selects 1.9.24, anything else (or nothing declared) the default.
+     */
+    public static String versionFor(String... texts) {
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                "(?:org\\.jetbrains\\.kotlin\\.android['\"\\)\\s]*version\\s*\\(?\\s*|kotlin_version\\s*=\\s*|\\bkotlin\\s*=\\s*|kotlin-gradle-plugin:)['\"]?(\\d+)\\.");
+        if (texts != null) {
+            for (String t : texts) {
+                if (t == null) {
+                    continue;
+                }
+                java.util.regex.Matcher m = p.matcher(t);
+                if (m.find()) {
+                    return "1".equals(m.group(1)) ? LEGACY_VERSION : DEFAULT_VERSION;
+                }
+            }
+        }
+        return DEFAULT_VERSION;
     }
 
     /** kotlinc's -jvm-target value for a Java level. */
@@ -78,8 +106,12 @@ public final class KotlinSupport {
 
     /** Downloads (or finds in the cache) the compiler and everything it needs; returns the jars in resolution order. */
     public static List<File> resolveCompiler(MavenDependencies deps, BuildLog log) throws IOException {
+        return resolveCompiler(deps, log, DEFAULT_VERSION);
+    }
+
+    public static List<File> resolveCompiler(MavenDependencies deps, BuildLog log, String version) throws IOException {
         List<Resolver.Root> roots = new ArrayList<Resolver.Root>();
-        roots.add(new Resolver.Root(Coordinate.parse(COMPILER), true, true, null));
+        roots.add(new Resolver.Root(Coordinate.parse("org.jetbrains.kotlin:kotlin-compiler-embeddable:" + version), true, true, null));
         roots.add(new Resolver.Root(Coordinate.parse(STAX_API), true, true, null));
         roots.add(new Resolver.Root(Coordinate.parse(REFLECT), true, true, null));
         // the coroutines POM names an old kotlin-stdlib-jdk8; the stdlib already comes with the compiler
@@ -103,7 +135,7 @@ public final class KotlinSupport {
         if (jars.isEmpty()) {
             throw new IOException("The Kotlin compiler could not be resolved.");
         }
-        log.line("Kotlin compiler " + VERSION + ": " + jars.size() + " jar(s) ready");
+        log.line("Kotlin compiler " + version + ": " + jars.size() + " jar(s) ready");
         return jars;
     }
 }

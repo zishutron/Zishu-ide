@@ -164,7 +164,8 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 listener.onStage(BuildStage.BUILD, "Compiling Kotlin");
                 listener.onProgress(25);
                 OnDeviceTools.KotlinJob kj = new OnDeviceTools.KotlinJob();
-                kj.compilerJars = KotlinSupport.resolveCompiler(maven, log);
+                kj.version = plan.kotlinVersion;
+                kj.compilerJars = KotlinSupport.resolveCompiler(maven, log, plan.kotlinVersion);
                 cancel.throwIfCancelled();
                 kj.sourceFiles = new ArrayList<File>(plan.kotlinSources);
                 kj.sourceFiles.addAll(sources);
@@ -305,6 +306,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
         String versionName;
         String apkBaseName;
         int javaLevel = JavaLevels.DEFAULT;
+        String kotlinVersion = KotlinSupport.DEFAULT_VERSION;
         GradleDeps gradleDeps = new GradleDeps();
         File moduleDir;
         String manifestPackage;
@@ -362,9 +364,12 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             Plan p = new Plan();
             p.kotlinSources.addAll(kotlinFiles);
             if (!kotlinFiles.isEmpty()) {
-                gd.addImplementation(KotlinSupport.stdlib());
-                log.line("Kotlin: " + kotlinFiles.size() + " file(s), compiled with Kotlin " + KotlinSupport.VERSION
-                        + " (experimental on-phone compiler)");
+                File rootGradle = new File(root, "build.gradle");
+                String rootText = rootGradle.isFile() ? IoUtil.readUtf8(rootGradle, 1024 * 1024) : null;
+                p.kotlinVersion = KotlinSupport.versionFor(gradleText, rootText,
+                        catalog == null || !catalogFile.isFile() ? null : IoUtil.readUtf8(catalogFile, 1024 * 1024));
+                gd.addImplementation(KotlinSupport.stdlib(p.kotlinVersion));
+                log.line("Kotlin: " + kotlinFiles.size() + " file(s), compiled with Kotlin " + p.kotlinVersion);
             }
             p.gradleDeps = gd;
             p.moduleDir = module;

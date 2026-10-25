@@ -22,8 +22,8 @@
   does this ahead of time. Uninstalling the IDE removes all of it. Download is over HTTPS from Google Maven and Maven Central only.
 - **Build time:** a project with many libraries (for example about 900 dex inputs) can take several minutes the first time.
 - **Signing:** on-phone builds are signed with a debug key unique to your install. An APK signed with a different key cannot be
-  installed over an app that was signed with another key. Release signing of user apps (your own keystore through `zishu sign`)
-  is available but has not been verified on a phone. No AAB, no APK splits, no ProGuard/R8 shrinking (D8 only).
+  installed over an app that was signed with another key. Signing with your own keystore (`zishu sign`)
+  works and was verified on a phone with a PKCS12 keystore. No AAB, no APK splits, no ProGuard/R8 shrinking (D8 only).
 - The D8 warnings about `java.lang.instrument` / `sun.misc` types from kotlinx-coroutines debug classes are expected and harmless.
 
 ## Cloud build

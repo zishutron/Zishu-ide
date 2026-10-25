@@ -44,11 +44,11 @@ public class KotlinTest {
 
     private void publish() {
         String k = "org/jetbrains/kotlin/";
-        repoFiles.put(k + "kotlin-compiler-embeddable/1.9.24/kotlin-compiler-embeddable-1.9.24.jar", TestSupport.utf8("compiler"));
-        repoFiles.put(k + "kotlin-compiler-embeddable/1.9.24/kotlin-compiler-embeddable-1.9.24.pom", TestSupport.utf8(
-                "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-compiler-embeddable</artifactId><version>1.9.24</version>"
+        repoFiles.put(k + "kotlin-compiler-embeddable/2.0.21/kotlin-compiler-embeddable-2.0.21.jar", TestSupport.utf8("compiler"));
+        repoFiles.put(k + "kotlin-compiler-embeddable/2.0.21/kotlin-compiler-embeddable-2.0.21.pom", TestSupport.utf8(
+                "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-compiler-embeddable</artifactId><version>2.0.21</version>"
                 + "<dependencies><dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId>"
-                + "<version>1.9.24</version></dependency></dependencies></project>"));
+                + "<version>2.0.21</version></dependency></dependencies></project>"));
         repoFiles.put("javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.jar", TestSupport.utf8("stax"));
         repoFiles.put("javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.pom", TestSupport.utf8(
                 "<project><groupId>javax.xml.stream</groupId><artifactId>stax-api</artifactId><version>1.0-2</version></project>"));
@@ -60,9 +60,9 @@ public class KotlinTest {
                 "<project><groupId>org.jetbrains.kotlinx</groupId><artifactId>kotlinx-coroutines-core-jvm</artifactId><version>1.6.4</version>"
                 + "<dependencies><dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib-jdk8</artifactId>"
                 + "<version>1.6.21</version></dependency></dependencies></project>"));
-        repoFiles.put(k + "kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.jar", TestSupport.utf8("stdlib"));
-        repoFiles.put(k + "kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.pom", TestSupport.utf8(
-                "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId><version>1.9.24</version></project>"));
+        repoFiles.put(k + "kotlin-stdlib/2.0.21/kotlin-stdlib-2.0.21.jar", TestSupport.utf8("stdlib"));
+        repoFiles.put(k + "kotlin-stdlib/2.0.21/kotlin-stdlib-2.0.21.pom", TestSupport.utf8(
+                "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId><version>2.0.21</version></project>"));
     }
 
     private MavenDependencies deps() throws IOException {
@@ -119,7 +119,7 @@ public class KotlinTest {
         assertTrue("Java files are passed to kotlinc as symbols", kj.sourceFiles.toString().contains("MainActivity.java"));
         assertTrue(kj.sourceFiles.toString().contains("R.java"));
         assertEquals(t.androidJar, kj.classpath.get(0));
-        assertTrue(kj.classpath.toString(), kj.classpath.toString().contains("kotlin-stdlib-1.9.24.jar"));
+        assertTrue(kj.classpath.toString(), kj.classpath.toString().contains("kotlin-stdlib-2.0.21.jar"));
         assertEquals(5, kj.compilerJars.size());
         assertTrue(kj.compilerJars.toString(), kj.compilerJars.toString().contains("kotlinx-coroutines-core-jvm-1.6.4.jar"));
         assertTrue(kj.compilerJars.toString(), kj.compilerJars.toString().contains("kotlin-reflect-1.6.10.jar"));
@@ -128,9 +128,9 @@ public class KotlinTest {
         assertEquals("com_example_myapp", kj.moduleName);
         // ECJ sees the Kotlin output and the stdlib
         assertTrue(t.classpath.toString(), t.classpath.contains(kj.outDir));
-        assertTrue(t.classpath.toString(), t.classpath.toString().contains("kotlin-stdlib-1.9.24.jar"));
+        assertTrue(t.classpath.toString(), t.classpath.toString().contains("kotlin-stdlib-2.0.21.jar"));
         // the stdlib is packaged into the app
-        assertTrue(t.lastDexJob.libraryJars.toString(), t.lastDexJob.libraryJars.toString().contains("kotlin-stdlib-1.9.24.jar"));
+        assertTrue(t.lastDexJob.libraryJars.toString(), t.lastDexJob.libraryJars.toString().contains("kotlin-stdlib-2.0.21.jar"));
         assertTrue(r.log, r.log.contains("Kotlin: 2 file(s)"));
     }
 
@@ -182,6 +182,19 @@ public class KotlinTest {
         BuildResult r = build(project(GRADLE, true), t, deps());
         assertFalse(r.success);
         assertFalse(t.calls.contains("kotlinc"));
+    }
+
+    @Test
+    public void versionIsChosenFromTheProject() {
+        assertEquals("2.0.21", KotlinSupport.versionFor((String) null));
+        assertEquals("2.0.21", KotlinSupport.versionFor("plugins { id 'com.android.application' }"));
+        assertEquals("1.9.24", KotlinSupport.versionFor("plugins { id 'org.jetbrains.kotlin.android' version '1.9.22' apply false }"));
+        assertEquals("1.9.24", KotlinSupport.versionFor("plugins { id(\"org.jetbrains.kotlin.android\") version \"1.8.0\" }"));
+        assertEquals("2.0.21", KotlinSupport.versionFor("plugins { id 'org.jetbrains.kotlin.android' version '2.1.0' }"));
+        assertEquals("1.9.24", KotlinSupport.versionFor("[versions]\nagp = \"8.7.3\"\nkotlin = \"1.9.10\"\n"));
+        assertEquals("2.0.21", KotlinSupport.versionFor("[versions]\nkotlin = \"2.0.0\"\n"));
+        assertEquals("1.9.24", KotlinSupport.versionFor("classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.7.20'"));
+        assertEquals("org.jetbrains.kotlin:kotlin-stdlib:1.9.24", KotlinSupport.stdlib("1.9.24").toString());
     }
 
     @Test

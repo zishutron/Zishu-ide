@@ -14,7 +14,7 @@
 - **Java level:** the bundled compiler (ECJ 3.25.0) compiles up to Java 15. A higher level in `build.gradle` is lowered to 15 and
   the build log says so. Newer language features (records finalised after 15, pattern matching for switch, and so on) are not
   available. Lambdas and newer syntax have been tested on a few projects only.
-- **Kotlin:** two fixed compiler versions: 2.0.21 (K2, default) and 1.9.24 (used when the project declares a Kotlin 1.x plugin). Language features newer than 2.0 are not supported. 2.0.21 has been added but is not yet verified on a phone. Coroutines used
+- **Kotlin:** two fixed compiler versions: 2.0.21 (K2, default) and 1.9.24 (used when the project declares a Kotlin 1.x plugin). Language features newer than 2.0 are not supported. 2.0.21 is verified on a phone, including a multi-file app with AndroidX libraries. Coroutines used
   directly in app code and Kotlin mixed with your own Java files are not tested yet. The compiler runs in-process on the
   phone, so a very large Kotlin project may be slow or run out of memory.
 - **First use needs internet and time.** Libraries and the Kotlin compiler are downloaded once and kept on the phone; the Kotlin

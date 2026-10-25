@@ -79,12 +79,13 @@ Verified by running it on real phones (reported by the author while testing):
   AndroidX and KTX libraries (62 libraries resolved, about 900 dex inputs, Java 11); a Kotlin compile error is reported with
   file, line and message in the build log.
 - The first-run download popup appears when resources are missing, **Download** fetches them in the terminal, and the popup does not return afterwards; the build log scrolls on its own (Android 8 fix); Java 15 is the default.
-- Terminal, visible `apk/` folder and download, signing with your own keystore, GitHub clone, ZIP import without Gradle files.
+- Signing with your own keystore: `zishu keystore info` and `zishu sign` on a PKCS12 keystore produced a signed APK (v1 + v2) that verified and installed on a phone with your certificate.
+- Terminal, visible `apk/` folder and download, GitHub clone, ZIP import without Gradle files.
 - A stable CI signing key: new IDE APKs install over the previous one.
 
 Not verified yet:
 - Kotlin mixed with hand-written Java files, coroutines used directly in app code, kapt/ksp and Compose (not supported).
-- Lambdas and newer Java syntax across many projects; phones other than the ones tested; release signing of user apps.
+- Lambdas and newer Java syntax across many projects; phones other than the ones tested.
 - Annotation processors, Compose, multi-module Gradle projects and NDK (not supported yet).
 
 See [docs/STATUS.md](docs/STATUS.md) and [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).

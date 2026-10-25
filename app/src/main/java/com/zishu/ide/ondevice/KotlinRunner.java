@@ -92,6 +92,13 @@ final class KotlinRunner {
                     return false;
                 }
             }
+            if (needsUnsafeShim(version)) {
+                File shim = new File(dir, "unsafe-shim.ok");
+                File shimJar = new File(dir, "unsafe-shim.dex.jar");
+                if (!shim.isFile() || !shimJar.isFile() || !unsafeShimKey(ctx).equals(IoUtil.readUtf8(shim, 1024))) {
+                    return false;
+                }
+            }
             File standIns = new File(dir, "jdk-stand-ins.ok");
             return standIns.isFile() && ("stand-ins-1:" + marker(version, compilerJars)).equals(IoUtil.readUtf8(standIns, 1024 * 1024));
         } catch (IOException e) {
@@ -180,6 +187,10 @@ final class KotlinRunner {
                 dexJars.add(out);
             }
             File standIns = ensureStandIns(version, dir, compilerJars, androidJar, log);
+            if (needsUnsafeShim(version)) {
+                // first on the class path: it must win over the stand-in classes and is the only sun.misc.Unsafe the compiler sees
+                dexJars.add(0, ensureUnsafeShim(ctx, dir, androidJar, log));
+            }
             if (standIns != null) {
                 dexJars.add(standIns);
             }
@@ -196,7 +207,7 @@ final class KotlinRunner {
         }
         // Parent = the boot loader chain only, so the IDE's own classes never shadow the compiler's.
         ClassLoader parent = ClassLoader.getSystemClassLoader().getParent();
-        loader = new CompilerLoader(path.toString(), parent, new File(dir, "plugin-root"));
+        loader = new CompilerLoader(path.toString(), parent, new File(dir, "plugin-root"), needsUnsafeShim(version));
         loaderKey = key;
         return loader;
     }
@@ -298,10 +309,27 @@ final class KotlinRunner {
      */
     private static final class CompilerLoader extends DexClassLoader {
         private final File pluginRoot;
+        private final boolean ownUnsafe;
 
-        CompilerLoader(String dexPath, ClassLoader parent, File pluginRoot) {
+        CompilerLoader(String dexPath, ClassLoader parent, File pluginRoot, boolean ownUnsafe) {
             super(dexPath, null, null, parent);
             this.pluginRoot = pluginRoot;
+            this.ownUnsafe = ownUnsafe;
+        }
+
+        /** The Kotlin 2.x compiler gets the compatibility sun.misc.Unsafe (see UnsafeShim.java.txt) instead of the phone's. */
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            if (ownUnsafe && "sun.misc.Unsafe".equals(name)) {
+                synchronized (this) {
+                    Class<?> c = findLoadedClass(name);
+                    if (c == null) {
+                        c = findClass(name);
+                    }
+                    return c;
+                }
+            }
+            return super.loadClass(name, resolve);
         }
 
         @Override
@@ -326,6 +354,92 @@ final class KotlinRunner {
                 return null;
             }
         }
+    }
+
+    /** The Kotlin 2.x compiler (IntelliJ core) needs JDK 8 methods of sun.misc.Unsafe that Android does not have. */
+    private static boolean needsUnsafeShim(String version) {
+        return version != null && version.startsWith("2.");
+    }
+
+    private static String unsafeShimSource(Context ctx) throws IOException {
+        java.io.InputStream in = null;
+        try {
+            in = ctx.getAssets().open("kotlin/UnsafeShim.java.txt");
+            return new String(IoUtil.readAll(in, 1024 * 1024), IoUtil.UTF8);
+        } finally {
+            IoUtil.closeQuietly(in);
+        }
+    }
+
+    private static String unsafeShimKey(Context ctx) throws IOException {
+        String s = unsafeShimSource(ctx);
+        return "unsafe-shim-1:" + s.length() + ":" + s.hashCode();
+    }
+
+    /**
+     * Compiles the bundled sun.misc.Unsafe forwarding class with the on-phone Java compiler and converts it to a dex jar.
+     * Done once per phone (a few seconds); the converted compiler jars are not touched.
+     */
+    private static File ensureUnsafeShim(Context ctx, File dir, File androidJar, BuildLog log) throws ToolException, IOException {
+        File out = new File(dir, "unsafe-shim.dex.jar");
+        File ok = new File(dir, "unsafe-shim.ok");
+        String key = unsafeShimKey(ctx);
+        if (ok.isFile() && out.isFile() && key.equals(IoUtil.readUtf8(ok, 1024))) {
+            return out;
+        }
+        log.line("Preparing a compatibility class for the Kotlin 2 compiler (sun.misc.Unsafe)...");
+        ok.delete();
+        out.delete();
+        File tmp = new File(dir, "tmp-unsafe-shim");
+        if (tmp.exists()) {
+            IoUtil.deleteRecursively(tmp);
+        }
+        File srcDir = new File(tmp, "src/sun/misc");
+        File classes = new File(tmp, "classes");
+        if (!srcDir.mkdirs() || !classes.mkdirs()) {
+            throw new ToolException("Cannot create " + tmp);
+        }
+        File src = new File(srcDir, "Unsafe.java");
+        IoUtil.writeUtf8Atomic(src, unsafeShimSource(ctx));
+        final String[] argv = new String[]{"-source", "1.8", "-target", "1.8", "-proc:none", "-nowarn", "-encoding", "UTF-8",
+                "-bootclasspath", androidJar.getAbsolutePath(), "-d", classes.getAbsolutePath(), src.getAbsolutePath()};
+        final java.io.StringWriter text = new java.io.StringWriter();
+        boolean compiled;
+        try {
+            compiled = BigThread.run(new Callable<Boolean>() {
+                @Override
+                public Boolean call() {
+                    java.io.PrintWriter pw = new java.io.PrintWriter(text);
+                    boolean r = org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(argv, pw, pw, null);
+                    pw.flush();
+                    return r;
+                }
+            });
+        } catch (Exception e) {
+            throw new ToolException("The compatibility class could not be compiled: " + e, e);
+        }
+        File cls = new File(classes, "sun/misc/Unsafe.class");
+        if (!compiled || !cls.isFile()) {
+            throw new ToolException("The compatibility class for the Kotlin 2 compiler did not compile:\n" + text.toString().trim());
+        }
+        File jar = new File(tmp, "unsafe-shim.jar");
+        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jar));
+        try {
+            zos.putNextEntry(new ZipEntry("sun/misc/Unsafe.class"));
+            java.io.FileInputStream cin = new java.io.FileInputStream(cls);
+            try {
+                zos.write(IoUtil.readAll(cin, 4 * 1024 * 1024));
+            } finally {
+                IoUtil.closeQuietly(cin);
+            }
+            zos.closeEntry();
+        } finally {
+            zos.close();
+        }
+        convert(jar, java.util.Collections.singletonList(jar), androidJar, out, new File(dir, "tmp-unsafe-shim-dex"), log);
+        IoUtil.deleteRecursively(tmp);
+        IoUtil.writeUtf8Atomic(ok, key);
+        return out;
     }
 
     /** Unpacks META-INF/extensions/* of the compiler jar into {@code root} (the folder the compiler reads its configuration from). */

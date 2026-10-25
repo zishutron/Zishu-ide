@@ -4,6 +4,7 @@
 installing Android projects (Java, Kotlin, XML layouts, programmatic UI, WebView apps) with **no computer and no Android Studio**.
 Builds run on the phone itself; a GitHub Actions cloud build is available as an optional fallback.
 
+- Download size: about 38.6 MB (libraries and the Kotlin compiler are downloaded later, only if you need them)
 - Package: `com.zishu.ide` · Java · minSdk 21 · targetSdk 35 · the IDE itself uses no AndroidX (your apps can)
 - Code editor with syntax highlighting, tabs, undo/redo, find and replace, file explorer and problems list
 - Built-in **Zishu Terminal** with IDE commands and an Android shell
@@ -87,25 +88,23 @@ Not verified yet:
 
 See [docs/STATUS.md](docs/STATUS.md) and [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
 
-## Build the IDE itself (no Android Studio needed)
+## Download
 
-1. Push this repository to GitHub.
-2. **Recommended, once:** add the four repository secrets below so every build is signed with the same key. Without them each
-   CI run signs with a fresh random debug key and Android will not install the new APK over the old one (you would have to
-   uninstall first, and uninstalling removes the downloaded libraries and the prepared Kotlin compiler).
-   `ZISHU_KEYSTORE_BASE64` (the keystore file, base64), `ZISHU_KEYSTORE_PASSWORD`, `ZISHU_KEY_ALIAS`, `ZISHU_KEY_PASSWORD`
-   (Settings → Secrets and variables → Actions). Never commit them.
-3. Open Actions → **Build Zishu IDE** → Run workflow (it also runs on every push).
-4. Download the `zishu-ide-debug-apk` artifact and install it. The run summary shows whether the stable key was used
-   (`Signing key: stable`) and its certificate SHA-256.
+Download the latest APK from the **Releases** page of this repository:
 
-The workflow runs the unit tests, downloads the on-phone toolchain (`scripts/fetch-toolchain.sh`), builds the debug APK,
-checks package / minSdk / targetSdk / signature, and prints the measured APK size.
+**[zishu.ide_v0.1.0.apk (v0.1.0)](https://github.com/zishutron/Zishu-ide/releases/download/v0.1.0/zishu.ide_v0.1.0.apk)**
+· [all releases](https://github.com/zishutron/Zishu-ide/releases)
+
+1. Open the link on your phone and download the APK.
+2. Allow "Install unknown apps" for your browser or file manager when Android asks, then install.
+3. The APK is about 38.6 MB. Needs Android 8+ and a 64-bit ARM phone (the cloud build also works on other phones).
+4. Later versions install over this one, because every release is signed with the same key.
+
+
+## Build from source (developers)
 
 Locally (JDK 17, Android SDK platforms 34 and 35, build-tools 34.0.0):
 `sh scripts/fetch-toolchain.sh && ./gradlew testDebugUnitTest assembleDebug`
-
-Signed release: run **Release Zishu IDE** (uses the same four secrets, see the top of `.github/workflows/release-ide.yml`).
 
 ## Set up cloud builds (optional)
 

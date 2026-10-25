@@ -73,6 +73,7 @@ public final class NewProjectActivity extends BaseActivity {
     private Ui.Choice cTarget;
     private Ui.Choice cCompile;
     private Ui.Choice cJava;
+    private Ui.Choice cKotlin;
     private Ui.Choice cUi;
     private Ui.Choice cWebSource;
     private Switch swJs;
@@ -200,6 +201,8 @@ public final class NewProjectActivity extends BaseActivity {
         addGap(page, cCompile.view);
         cJava = Ui.choice(this, pal, "Java language level", new String[]{"Java 8", "Java 11", "Java 15", "Java 17"}, 2, null);
         addGap(page, cJava.view);
+        cKotlin = Ui.choice(this, pal, "Kotlin version", new String[]{"Kotlin 2.0.21", "Kotlin 1.9.24"}, 0, null);
+        addGap(page, cKotlin.view);
         LinearLayout info = Ui.banner(this, pal, R.drawable.ic_chip, pal.primary, "Build system: Gradle",
                 "Android Gradle Plugin " + Defaults.AGP_VERSION + ", Gradle " + Defaults.GRADLE_VERSION + ", JDK " + Defaults.JDK_VERSION
                         + ". Choosing 35 only sets the number; the cloud build installs the matching SDK Platform when it runs, "
@@ -369,7 +372,8 @@ public final class NewProjectActivity extends BaseActivity {
         nativeBox.setVisibility(t.isNative() ? View.VISIBLE : View.GONE);
         siteBox.setVisibility(t == ProjectType.WEBVIEW_SITE ? View.VISIBLE : View.GONE);
         localWebBox.setVisibility(t == ProjectType.WEBVIEW_LOCAL ? View.VISIBLE : View.GONE);
-        cJava.view.setVisibility(View.VISIBLE);
+        cJava.view.setVisibility(t == ProjectType.NATIVE_KOTLIN ? View.GONE : View.VISIBLE);
+        cKotlin.view.setVisibility(t == ProjectType.NATIVE_KOTLIN ? View.VISIBLE : View.GONE);
         ProjectConfig d = ProjectConfig.forType(t);
         updating = true;
         if (!idEdited) {
@@ -416,7 +420,10 @@ public final class NewProjectActivity extends BaseActivity {
         c.minSdk = 21 + cMin.index();
         c.targetSdk = 21 + cTarget.index();
         c.compileSdk = 21 + cCompile.index();
-        c.javaLevel = new int[]{8, 11, 15, 17}[cJava.index()];
+        c.javaLevel = t == ProjectType.NATIVE_KOTLIN ? 15 : new int[]{8, 11, 15, 17}[cJava.index()];
+        if (t == ProjectType.NATIVE_KOTLIN) {
+            c.kotlinVersion = cKotlin.index() == 0 ? "2.0.21" : "1.9.24";
+        }
         c.language = t == ProjectType.NATIVE_KOTLIN ? Language.KOTLIN : Language.JAVA;
         if (t.isNative()) {
             c.initialActivity = fActivity.value().trim();

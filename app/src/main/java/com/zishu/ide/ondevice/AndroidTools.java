@@ -245,11 +245,19 @@ public final class AndroidTools implements OnDeviceTools {
 
     /** First-run setup: converts the Kotlin compiler for this phone ahead of the first Kotlin build. */
     public void prepareKotlin(List<File> compilerJars, BuildLog log) throws ToolException {
-        KotlinRunner.prepareOnly(ctx, compilerJars, androidJar(), log);
+        prepareKotlin(com.zishu.ide.core.ondevice.KotlinSupport.DEFAULT_VERSION, compilerJars, log);
+    }
+
+    public void prepareKotlin(String version, List<File> compilerJars, BuildLog log) throws ToolException {
+        KotlinRunner.prepareOnly(ctx, version, compilerJars, androidJar(), log);
     }
 
     public boolean kotlinPrepared(List<File> compilerJars) {
-        return KotlinRunner.isPrepared(ctx, compilerJars);
+        return kotlinPrepared(com.zishu.ide.core.ondevice.KotlinSupport.DEFAULT_VERSION, compilerJars);
+    }
+
+    public boolean kotlinPrepared(String version, List<File> compilerJars) {
+        return KotlinRunner.isPrepared(ctx, version, compilerJars);
     }
 
     @Override

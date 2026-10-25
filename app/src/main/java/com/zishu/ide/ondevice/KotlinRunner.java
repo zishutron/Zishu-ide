@@ -36,7 +36,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Runs the official Kotlin compiler on the phone (experimental). The compiler jars are converted to dex once with
+ * Runs the official Kotlin compiler on the phone. The compiler jars are converted to dex once with
  * D8 (kept under files/toolchains/kotlin-VERSION), loaded with a DexClassLoader and called through reflection.
  * Every stage logs what it does; nothing is assumed to work.
  */
@@ -53,8 +53,8 @@ final class KotlinRunner {
     }
 
     static void compile(Context ctx, final OnDeviceTools.KotlinJob job, File androidJar, final BuildLog log) throws ToolException {
-        ClassLoader cl = prepare(ctx, job.compilerJars, androidJar, log);
-        job.kotlinHome = new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
+        ClassLoader cl = prepare(ctx, job.version, job.compilerJars, androidJar, log);
+        job.kotlinHome = toolchainDir(ctx, job.version);
         ensurePluginRoot(new File(job.kotlinHome, "plugin-root"), job.compilerJars);
         final List<String> args = KotlinSupport.arguments(job);
         log.line("$ kotlinc (" + countKt(job) + " Kotlin file(s), jvm-target " + KotlinSupport.jvmTarget(job.javaLevel) + ")");
@@ -76,15 +76,15 @@ final class KotlinRunner {
     }
 
     /** Converts the compiler for this phone without compiling anything (first-run setup). */
-    static void prepareOnly(Context ctx, List<File> compilerJars, File androidJar, BuildLog log) throws ToolException {
-        prepare(ctx, compilerJars, androidJar, log);
-        ensurePluginRoot(new File(toolchainDir(ctx), "plugin-root"), compilerJars);
+    static void prepareOnly(Context ctx, String version, List<File> compilerJars, File androidJar, BuildLog log) throws ToolException {
+        prepare(ctx, version, compilerJars, androidJar, log);
+        ensurePluginRoot(new File(toolchainDir(ctx, version), "plugin-root"), compilerJars);
     }
 
     /** True when every compiler jar is converted and the stand-in classes exist; looks at the files only. */
-    static boolean isPrepared(Context ctx, List<File> compilerJars) {
+    static boolean isPrepared(Context ctx, String version, List<File> compilerJars) {
         try {
-            File dir = toolchainDir(ctx);
+            File dir = toolchainDir(ctx, version);
             for (File jar : compilerJars) {
                 File ok = new File(dir, jar.getName() + ".ok");
                 String want = "split-" + SPLIT_BYTES + ":" + jar.length();
@@ -93,14 +93,14 @@ final class KotlinRunner {
                 }
             }
             File standIns = new File(dir, "jdk-stand-ins.ok");
-            return standIns.isFile() && ("stand-ins-1:" + marker(compilerJars)).equals(IoUtil.readUtf8(standIns, 1024 * 1024));
+            return standIns.isFile() && ("stand-ins-1:" + marker(version, compilerJars)).equals(IoUtil.readUtf8(standIns, 1024 * 1024));
         } catch (IOException e) {
             return false;
         }
     }
 
-    private static File toolchainDir(Context ctx) {
-        return new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
+    private static File toolchainDir(Context ctx, String version) {
+        return new File(ctx.getFilesDir(), "toolchains/kotlin-" + version);
     }
 
     private static int countKt(OnDeviceTools.KotlinJob job) {
@@ -147,10 +147,10 @@ final class KotlinRunner {
 
     // ------------------------------------------------------------------------ toolchain
 
-    private static synchronized ClassLoader prepare(Context ctx, List<File> compilerJars, File androidJar, BuildLog log)
+    private static synchronized ClassLoader prepare(Context ctx, String version, List<File> compilerJars, File androidJar, BuildLog log)
             throws ToolException {
-        File dir = new File(ctx.getFilesDir(), "toolchains/kotlin-" + KotlinSupport.VERSION);
-        String key = marker(compilerJars);
+        File dir = toolchainDir(ctx, version);
+        String key = marker(version, compilerJars);
         if (loader != null && key.equals(loaderKey)) {
             return loader;
         }
@@ -179,7 +179,7 @@ final class KotlinRunner {
                 }
                 dexJars.add(out);
             }
-            File standIns = ensureStandIns(dir, compilerJars, androidJar, log);
+            File standIns = ensureStandIns(version, dir, compilerJars, androidJar, log);
             if (standIns != null) {
                 dexJars.add(standIns);
             }
@@ -205,10 +205,10 @@ final class KotlinRunner {
      * Empty stand-in classes for JDK classes the compiler mentions but Android lacks (javax.swing.Icon ...), converted to a
      * dex jar that is last on the class path, so real classes always win. Rebuilt only when the compiler jars change.
      */
-    private static File ensureStandIns(File dir, List<File> jars, File androidJar, BuildLog log) throws ToolException, IOException {
+    private static File ensureStandIns(String version, File dir, List<File> jars, File androidJar, BuildLog log) throws ToolException, IOException {
         File out = new File(dir, "jdk-stand-ins.dex.jar");
         File ok = new File(dir, "jdk-stand-ins.ok");
-        String key = "stand-ins-1:" + marker(jars);
+        String key = "stand-ins-1:" + marker(version, jars);
         if (ok.isFile() && key.equals(IoUtil.readUtf8(ok, 1024 * 1024))) {
             return out.isFile() ? out : null;
         }
@@ -379,8 +379,8 @@ final class KotlinRunner {
         }
     }
 
-    private static String marker(List<File> jars) {
-        StringBuilder sb = new StringBuilder(KotlinSupport.VERSION + " split-" + SPLIT_BYTES);
+    private static String marker(String version, List<File> jars) {
+        StringBuilder sb = new StringBuilder(version + " split-" + SPLIT_BYTES);
         for (File f : jars) {
             sb.append('\n').append(f.getName()).append(':').append(f.length());
         }

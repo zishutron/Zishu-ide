@@ -74,6 +74,7 @@ Verified by running it on real phones (reported by the author while testing):
 - On-phone build, install and launch of generated Java projects and of a larger WebView app.
 - AndroidX / Maven libraries on the phone: annotation, core and AppCompat projects build (aapt2 with real AAR resources, D8 with
   real AndroidX); Java levels up to 15 build.
+- Kotlin 2.0.21 (the default) on the phone: native Kotlin projects build, install and run, including a multi-file notes app (4 Kotlin files, 51 libraries resolved, about 770 dex inputs). The New Project screen shows a Kotlin version choice (2.0.21 or 1.9.24) for Native Kotlin.
 - Kotlin 1.9.24 on the phone: native Kotlin projects build, install and run, including a multi-file Kotlin app (a calculator) using
   AndroidX and KTX libraries (62 libraries resolved, about 900 dex inputs, Java 11); a Kotlin compile error is reported with
   file, line and message in the build log.
@@ -82,7 +83,7 @@ Verified by running it on real phones (reported by the author while testing):
 - A stable CI signing key: new IDE APKs install over the previous one.
 
 Not verified yet:
-- Kotlin 2.0.21 on a phone (added after the Kotlin 1.9.24 tests), Kotlin mixed with hand-written Java files, coroutines used directly in app code, kapt/ksp and Compose (not supported).
+- Kotlin mixed with hand-written Java files, coroutines used directly in app code, kapt/ksp and Compose (not supported).
 - Lambdas and newer Java syntax across many projects; phones other than the ones tested; release signing of user apps.
 - Annotation processors, Compose, multi-module Gradle projects and NDK (not supported yet).
 

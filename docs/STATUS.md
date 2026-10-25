@@ -23,12 +23,13 @@ Last updated after on-phone testing by the author. "Verified" means it was run, 
 - First launch: the "download build resources" popup appears when resources are missing; **Download** opens the terminal and
   downloads everything there (`zishu setup all`); after that the popup does not appear again.
 - Build log scrolls on its own on the phone that had the Android 8 problem (the whole build screen no longer scrolls).
-- Terminal, visible `apk/` folder and download, signing with your own keystore, GitHub clone, ZIP import without Gradle files.
+- Signing with your own keystore: `zishu keystore info` and `zishu sign` on a PKCS12 keystore produced a signed APK (v1 + v2) that verified and installed on a phone with your certificate.
+- Terminal, visible `apk/` folder and download, GitHub clone, ZIP import without Gradle files.
 
 ## Not verified yet
 - Kotlin mixed with hand-written Java files, and coroutines used directly in app code.
 - Lambdas and newer Java syntax across many projects; phones other than the ones tested.
-- Release signing of user apps; the cloud build against a real repository after the latest changes.
+- The cloud build against a real repository after the latest changes.
 
 ## Not supported on the phone (use the cloud build)
 Annotation processors (kapt, ksp, `annotationProcessor`), Compose, multi-module Gradle (`project(':x')`), NDK, dynamic

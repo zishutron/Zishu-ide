@@ -25,6 +25,8 @@ public final class Aar {
     /** jni/ folder with one sub folder per ABI, or null. */
     public final File jniDir;
     public final String packageName;
+    /** R.txt (the library's own resource symbols) or null. */
+    public File rTxt;
 
     private Aar(File dir, File classes, File res, File assets, File manifest, File jni, String pkg) {
         this.dir = dir;
@@ -65,6 +67,10 @@ public final class Aar {
         Aar a = new Aar(dir, classes.isFile() ? classes : null, res.isDirectory() && hasFiles(res) ? res : null,
                 assets.isDirectory() ? assets : null, manifest.isFile() ? manifest : null,
                 jni.isDirectory() ? jni : null, pkg);
+        File rt = new File(dir, "R.txt");
+        if (rt.isFile()) {
+            a.rTxt = rt;
+        }
         File[] libs = new File(dir, "libs").listFiles();
         if (libs != null) {
             Arrays.sort(libs);

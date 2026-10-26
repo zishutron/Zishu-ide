@@ -113,11 +113,12 @@ public class KotlinTest {
         OnDeviceTest.FakeTools t = new OnDeviceTest.FakeTools(tmp.newFile("android.jar"));
         BuildResult r = build(project(GRADLE, true), t, deps());
         assertTrue(r.log, r.success);
-        assertEquals(Arrays.asList("aapt2", "kotlinc", "javac", "d8", "sign"), t.calls);
+        assertEquals("R classes first, then Kotlin, then the project's Java", Arrays.asList("aapt2", "javac", "kotlinc", "javac", "d8", "sign"), t.calls);
         OnDeviceTools.KotlinJob kj = t.lastKotlinJob;
         assertEquals(2, countKt(kj.sourceFiles));
         assertTrue("Java files are passed to kotlinc as symbols", kj.sourceFiles.toString().contains("MainActivity.java"));
-        assertTrue(kj.sourceFiles.toString().contains("R.java"));
+        assertFalse("R.java goes to kotlinc as compiled classes, not as a source", kj.sourceFiles.toString().contains("R.java"));
+        assertTrue("the compiled R classes are on the Kotlin classpath", kj.classpath.toString().contains("r-classes"));
         assertEquals(t.androidJar, kj.classpath.get(0));
         assertTrue(kj.classpath.toString(), kj.classpath.toString().contains("kotlin-stdlib-2.0.21.jar"));
         assertEquals(5, kj.compilerJars.size());
@@ -165,7 +166,7 @@ public class KotlinTest {
         assertFalse(r.success);
         assertTrue(r.errorTitle, r.errorTitle.contains("Kotlin compilation failed"));
         assertTrue(r.log, r.log.contains("unresolved reference: foo"));
-        assertFalse(t.calls.contains("javac"));
+        assertEquals("the project's Java is not compiled after a Kotlin failure", Arrays.asList("aapt2", "javac", "kotlinc"), t.calls);
     }
 
     @Test

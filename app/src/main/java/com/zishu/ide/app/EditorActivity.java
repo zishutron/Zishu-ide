@@ -289,6 +289,7 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
 
     private EditText smallEdit(String hint) {
         EditText e = new EditText(this);
+        Ui.safeSelection(e);
         e.setHint(hint);
         e.setHintTextColor(pal.textSecondary);
         e.setTextColor(pal.text);

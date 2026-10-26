@@ -320,6 +320,7 @@ public final class Ui {
         TextView l = text(c, pal, label, Style.LABEL);
         box.addView(l, lpMargin(c, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 4, 0, 0, 6));
         EditText e = new EditText(c);
+        safeSelection(e);
         e.setText(initial);
         e.setHint(hint);
         e.setHintTextColor(pal.textSecondary);
@@ -364,6 +365,21 @@ public final class Ui {
         public void select(int i) {
             selected = i;
             value.setText(options[i]);
+        }
+    }
+
+    /**
+     * Android 8.1/9 can crash in SelectionActionModeHelper (IllegalArgumentException from Preconditions.checkArgument) when the
+     * text of a selectable view changes while its selection toolbar is open, as the build log and the editor do. Without a
+     * text classifier that code path is skipped; the copy / select-all toolbar still works.
+     */
+    public static void safeSelection(TextView t) {
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            try {
+                t.setTextClassifier(android.view.textclassifier.TextClassifier.NO_OP);
+            } catch (Throwable ignored) {
+                // a view without selection support: nothing to protect
+            }
         }
     }
 

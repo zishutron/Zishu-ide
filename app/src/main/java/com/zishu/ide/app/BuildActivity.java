@@ -146,6 +146,7 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
         page.addView(Ui.section(this, pal, "Build log"));
         logView = Ui.text(this, pal, "", Ui.Style.MONO);
         logView.setTextIsSelectable(true);
+        Ui.safeSelection(logView);
         logView.setPadding(dp(12), dp(12), dp(12), dp(12));
         logView.setBackground(Ui.rounded(this, pal.codeBg, pal.outline, 12));
         // The log box sits inside the page's own ScrollView. Older Android versions (8) let the page take the touch
@@ -547,6 +548,7 @@ public final class BuildActivity extends BaseActivity implements BuildCoordinato
         final String log = history.readLog(e.id);
         TextView t = Ui.text(this, pal, log.length() == 0 ? "(no log was saved)" : log, Ui.Style.MONO);
         t.setTextIsSelectable(true);
+        Ui.safeSelection(t);
         t.setPadding(dp(16), dp(8), dp(16), dp(8));
         ScrollView sv = new ScrollView(this);
         sv.addView(t);

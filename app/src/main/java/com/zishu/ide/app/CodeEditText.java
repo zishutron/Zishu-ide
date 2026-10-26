@@ -115,6 +115,7 @@ public final class CodeEditText extends EditText {
     }
 
     private void init() {
+        Ui.safeSelection(this);
         setTypeface(Typeface.MONOSPACE);
         setGravity(Gravity.TOP | Gravity.START);
         setBackground(null);

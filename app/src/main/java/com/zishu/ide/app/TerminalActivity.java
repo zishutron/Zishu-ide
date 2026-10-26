@@ -159,6 +159,7 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
         output.setLineSpacing(0, 1.12f);
         output.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
         output.setTextIsSelectable(true);
+        Ui.safeSelection(output);
         scroll.addView(output, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(scroll, Ui.weight(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -223,6 +224,7 @@ public final class TerminalActivity extends BaseActivity implements TerminalStat
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 4), Ui.dp(this, 4));
         input = new EditText(this);
+        Ui.safeSelection(input);
         input.setTypeface(Typeface.MONOSPACE);
         input.setTextSize(14.5f);
         input.setTextColor(pal.text);

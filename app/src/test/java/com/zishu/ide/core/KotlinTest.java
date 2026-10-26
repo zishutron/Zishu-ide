@@ -118,7 +118,7 @@ public class KotlinTest {
         assertEquals(2, countKt(kj.sourceFiles));
         assertTrue("Java files are passed to kotlinc as symbols", kj.sourceFiles.toString().contains("MainActivity.java"));
         assertFalse("R.java goes to kotlinc as compiled classes, not as a source", kj.sourceFiles.toString().contains("R.java"));
-        assertTrue("the compiled R classes are on the Kotlin classpath", kj.classpath.toString().contains("r-classes"));
+        assertTrue("the compiled R classes are on the Kotlin classpath", kj.classpath.contains(kj.outDir));
         assertEquals(t.androidJar, kj.classpath.get(0));
         assertTrue(kj.classpath.toString(), kj.classpath.toString().contains("kotlin-stdlib-2.0.21.jar"));
         assertEquals(5, kj.compilerJars.size());

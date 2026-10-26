@@ -25,7 +25,10 @@ public final class LibraryPlan {
     public final List<File> dexJars = new ArrayList<File>();
     public final List<OnDeviceTools.ResLib> resLibs = new ArrayList<OnDeviceTools.ResLib>();
     public final List<File> assetDirs = new ArrayList<File>();
+    /** Packages whose R class aapt2 has to generate (a library without an R.txt). */
     public final List<String> extraPackages = new ArrayList<String>();
+    /** Library R.txt files by package: those R classes are generated from the symbols they list (see LibraryR). */
+    public final Map<String, List<File>> rTxts = new LinkedHashMap<String, List<File>>();
     public final List<ManifestMerger.Lib> manifests = new ArrayList<ManifestMerger.Lib>();
     /** APK entry name (lib/arm64-v8a/libx.so) to file. */
     public final Map<String, File> nativeLibs = new LinkedHashMap<String, File>();
@@ -77,7 +80,16 @@ public final class LibraryPlan {
                         lp.assetDirs.add(aar.assetsDir);
                     }
                     if (aar.packageName != null && !aar.packageName.equals(appPackage)) {
-                        packages.add(aar.packageName);
+                        if (aar.rTxt != null) {
+                            List<File> l = lp.rTxts.get(aar.packageName);
+                            if (l == null) {
+                                l = new ArrayList<File>();
+                                lp.rTxts.put(aar.packageName, l);
+                            }
+                            l.add(aar.rTxt);
+                        } else {
+                            packages.add(aar.packageName);
+                        }
                     }
                     if (aar.manifest != null) {
                         lp.manifests.add(new ManifestMerger.Lib(a.artifact + ":" + a.version,

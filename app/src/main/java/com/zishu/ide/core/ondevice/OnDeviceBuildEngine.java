@@ -145,11 +145,18 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 rj.libs.addAll(libs.resLibs);
                 rj.extraAssetsDirs.addAll(libs.assetDirs);
                 rj.extraPackages.addAll(libs.extraPackages);
+                if (!libs.rTxts.isEmpty()) {
+                    rj.symbolsFile = new File(work, "R.txt");
+                }
             }
             rj.genDir.mkdirs();
             rj.workDir.mkdirs();
             tools.compileResources(rj, log);
             requireFile(rj.outApk, "aapt2 did not produce the resource package");
+            if (rj.symbolsFile != null) {
+                requireFile(rj.symbolsFile, "aapt2 did not write the resource symbols (R.txt)");
+                writeLibraryR(libs, rj.symbolsFile, rj.genDir, log);
+            }
             timer.mark("resources");
             cancel.throwIfCancelled();
 
@@ -175,7 +182,8 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 cancel.throwIfCancelled();
                 // R.java and Manifest.java are compiled first (they only hold constants) and given to kotlinc as classes, which
                 // is how Gradle does it; only the project's own Java files go to kotlinc as sources (read for symbols).
-                File rClasses = new File(work, "r-classes");
+                // They are compiled into the same folder as the Kotlin classes, so the Java step later skips them.
+                File rClasses = classesDir;
                 rClasses.mkdirs();
                 if (!generated.isEmpty()) {
                     OnDeviceTools.JavaJob rjob = new OnDeviceTools.JavaJob();
@@ -200,18 +208,23 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             }
             listener.onStage(BuildStage.BUILD, "Compiling Java");
             listener.onProgress(45);
+            boolean kotlinUsed = !plan.kotlinSources.isEmpty();
+            // with Kotlin the generated R classes are already compiled (above); only the project's own Java is left
+            List<File> javaToCompile = kotlinUsed ? new ArrayList<File>(plan.javaSources) : sources;
             if (sources.isEmpty()) {
                 throw new ToolException("The project has no Java source files.");
             }
             OnDeviceTools.JavaJob jj = new OnDeviceTools.JavaJob();
-            jj.sourceFiles = sources;
+            jj.sourceFiles = javaToCompile;
             jj.classpath = new ArrayList<File>(classpath);
-            if (!plan.kotlinSources.isEmpty()) {
+            if (kotlinUsed) {
                 jj.classpath.add(classesDir);
             }
             jj.javaLevel = plan.javaLevel;
             jj.outDir = classesDir;
-            tools.compileJava(jj, log);
+            if (!javaToCompile.isEmpty()) {
+                tools.compileJava(jj, log);
+            }
             timer.mark("Java");
             cancel.throwIfCancelled();
 
@@ -287,13 +300,19 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             return BuildResult.cancelled(elapsed(start), ID, variant, log.text(), null);
         } catch (ToolException e) {
             log.line("ERROR: " + e.getMessage());
+            if (noSpace(e)) {
+                log.line(NO_SPACE);
+            }
             cleanQuietly(work);
             List<BuildLogAnalyzer.Finding> findings = BuildLogAnalyzer.analyze(log.text());
-            return BuildResult.failure(firstLine(e.getMessage()), elapsed(start), ID, variant, log.text(), findings, null);
+            return BuildResult.failure(noSpace(e) ? NO_SPACE : firstLine(e.getMessage()), elapsed(start), ID, variant, log.text(), findings, null);
         } catch (IOException e) {
             log.line("ERROR: " + e.getMessage());
+            if (noSpace(e)) {
+                log.line(NO_SPACE);
+            }
             cleanQuietly(work);
-            return BuildResult.failure(firstLine(e.getMessage()), elapsed(start), ID, variant, log.text(), null, null);
+            return BuildResult.failure(noSpace(e) ? NO_SPACE : firstLine(e.getMessage()), elapsed(start), ID, variant, log.text(), null, null);
         } catch (RuntimeException e) {
             return unexpected(e, work, start, variant, log);
         } catch (OutOfMemoryError e) {
@@ -488,6 +507,44 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             f = new File(dir, base + "-debug-" + n++ + ".apk");
         }
         return f;
+    }
+
+    /**
+     * Writes one small R.java per library package: only the resources that library declares (its R.txt), with the ids aapt2
+     * gave them in this app. Needs the final symbol table written by aapt2 (--output-text-symbols).
+     */
+    private static final String NO_SPACE = "The phone is out of storage space. Free some space (the build needs several hundred MB) and build again.";
+
+    private static boolean noSpace(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String m = t.getMessage();
+            if (m != null && m.contains("No space left on device")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void writeLibraryR(LibraryPlan libs, File finalSymbols, File genDir, BuildLog log) throws IOException {
+        LibraryR.Table finalIds = LibraryR.parse(IoUtil.readUtf8(finalSymbols, 64L * 1024 * 1024));
+        int fields = 0;
+        for (Map.Entry<String, List<File>> e : libs.rTxts.entrySet()) {
+            LibraryR.Table lib = new LibraryR.Table();
+            for (File f : e.getValue()) {
+                LibraryR.merge(lib, LibraryR.parse(IoUtil.readUtf8(f, 16L * 1024 * 1024)));
+            }
+            File out = new File(genDir, e.getKey().replace('.', '/') + "/R.java");
+            if (out.exists()) {
+                continue; // aapt2 already wrote the full R of the app's own package
+            }
+            fields += lib.size();
+            File parent = out.getParentFile();
+            if (!parent.isDirectory() && !parent.mkdirs()) {
+                throw new IOException("Cannot create " + parent);
+            }
+            IoUtil.writeUtf8Atomic(out, LibraryR.generate(e.getKey(), lib, finalIds));
+        }
+        log.line("Library R classes: " + libs.rTxts.size() + " package(s), " + fields + " field(s) in total.");
     }
 
     private static void collectJava(File dir, List<File> out) {

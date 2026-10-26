@@ -45,6 +45,8 @@ public interface OnDeviceTools {
         public List<File> extraAssetsDirs = new java.util.ArrayList<File>();
         /** Library packages that need their own R class (generated with aapt2 --extra-packages). */
         public List<String> extraPackages = new java.util.ArrayList<String>();
+        /** If set, aapt2 writes the final resource symbols (R.txt) here. */
+        public File symbolsFile;
     }
 
     final class JavaJob {

@@ -13,6 +13,7 @@ import com.android.tools.r8.DiagnosticsHandler;
 import com.android.tools.r8.OutputMode;
 import com.zishu.ide.core.build.BuildEngine;
 import com.zishu.ide.core.build.BuildLog;
+import com.zishu.ide.core.ondevice.DexCache;
 import com.zishu.ide.core.ondevice.JavaLevels;
 import com.zishu.ide.core.ondevice.OnDeviceTools;
 import com.zishu.ide.core.ondevice.ToolException;
@@ -264,36 +265,32 @@ public final class AndroidTools implements OnDeviceTools {
     public void dex(final DexJob job, final BuildLog log) throws ToolException {
         final List<Path> programs = new ArrayList<Path>();
         collectClasses(job.classesDir, programs);
-        if (job.libraryJars != null) {
-            for (File j : job.libraryJars) {
-                programs.add(j.toPath());
+        List<File> libraries = job.libraryJars == null ? new ArrayList<File>() : job.libraryJars;
+        boolean cached = false;
+        if (!libraries.isEmpty()) {
+            try {
+                for (File f : predexLibraries(libraries, job, log)) {
+                    programs.add(f.toPath());
+                }
+                cached = true;
+            } catch (Exception e) {
+                log.line("The library dex cache could not be used (" + e + "); converting the libraries together with your code.");
+            }
+            if (!cached) {
+                for (File j : libraries) {
+                    programs.add(j.toPath());
+                }
             }
         }
         if (programs.isEmpty()) {
             throw new ToolException("The compiler produced no class files.");
         }
-        log.line("$ d8 (" + programs.size() + " inputs)");
+        log.line("$ d8 (" + programs.size() + " inputs" + (cached ? ", libraries from the cache" : "") + ")");
         try {
             BigThread.run(new Callable<Void>() {
                 @Override
                 public Void call() throws Exception {
-                    DiagnosticsHandler handler = new DiagnosticsHandler() {
-                        @Override
-                        public void error(Diagnostic d) {
-                            log.line("d8 error: " + d.getDiagnosticMessage());
-                        }
-
-                        @Override
-                        public void warning(Diagnostic d) {
-                            log.line("d8 warning: " + d.getDiagnosticMessage());
-                        }
-
-                        @Override
-                        public void info(Diagnostic d) {
-                            // informational output is not useful to the user
-                        }
-                    };
-                    D8Command cmd = D8Command.builder(handler)
+                    D8Command cmd = D8Command.builder(handler(log, true))
                             .addProgramFiles(programs)
                             .addLibraryFiles(job.androidJar.toPath())
                             .setMinApiLevel(job.minSdk)
@@ -309,6 +306,113 @@ public final class AndroidTools implements OnDeviceTools {
         } catch (Exception e) {
             throw new ToolException("D8 crashed: " + e, e);
         }
+    }
+
+    private static DiagnosticsHandler handler(final BuildLog log, final boolean warnings) {
+        return new DiagnosticsHandler() {
+            @Override
+            public void error(Diagnostic d) {
+                log.line("d8 error: " + d.getDiagnosticMessage());
+            }
+
+            @Override
+            public void warning(Diagnostic d) {
+                if (warnings) {
+                    log.line("d8 warning: " + d.getDiagnosticMessage());
+                }
+            }
+
+            @Override
+            public void info(Diagnostic d) {
+                // informational output is not useful to the user
+            }
+        };
+    }
+
+    /**
+     * Converts every library jar to dex once (D8 intermediate output) and keeps the result under files/dexcache. Later builds
+     * find the stored dex files and D8 only merges them with the app's own classes. Throws when anything goes wrong; the caller
+     * then falls back to converting the jars together with the app, so a cache problem can slow a build but never break it.
+     */
+    private List<File> predexLibraries(final List<File> libraries, final DexJob job, final BuildLog log) throws Exception {
+        final File root = new File(ctx.getFilesDir(), "dexcache");
+        if (!root.isDirectory() && !root.mkdirs()) {
+            throw new IOException("Cannot create " + root);
+        }
+        final String platform = job.androidJar.getName();
+        final List<File> result = new ArrayList<File>();
+        final List<File> todo = new ArrayList<File>();
+        final List<File> todoDirs = new ArrayList<File>();
+        int reused = 0;
+        for (File jar : libraries) {
+            File dir = DexCache.dirFor(root, jar, job.minSdk, platform);
+            if (DexCache.isComplete(dir)) {
+                result.addAll(DexCache.dexFiles(dir));
+                reused++;
+            } else {
+                todo.add(jar);
+                todoDirs.add(dir);
+            }
+        }
+        if (!todo.isEmpty()) {
+            log.line("Converting " + todo.size() + " librar" + (todo.size() == 1 ? "y" : "ies") + " once (kept for the next builds)...");
+            BigThread.run(new Callable<Void>() {
+                @Override
+                public Void call() throws Exception {
+                    for (int i = 0; i < todo.size(); i++) {
+                        dexLibrary(todo.get(i), todoDirs.get(i), libraries, job, log);
+                    }
+                    return null;
+                }
+            });
+            for (File dir : todoDirs) {
+                result.addAll(DexCache.dexFiles(dir));
+            }
+        }
+        log.line("Library cache: " + reused + " reused, " + todo.size() + " converted now.");
+        // keep the original order of the libraries (the merge is order-independent, but logs and errors stay predictable)
+        return result;
+    }
+
+    private void dexLibrary(File jar, File dir, List<File> allLibraries, DexJob job, BuildLog log) throws Exception {
+        if (dir.exists()) {
+            IoUtil.deleteRecursively(dir);
+        }
+        File tmp = new File(dir.getPath() + ".tmp");
+        if (tmp.exists()) {
+            IoUtil.deleteRecursively(tmp);
+        }
+        if (!tmp.mkdirs()) {
+            throw new IOException("Cannot create " + tmp);
+        }
+        if (DexCache.hasClasses(jar)) {
+            List<Path> classpath = new ArrayList<Path>();
+            for (File other : allLibraries) {
+                if (!other.equals(jar)) {
+                    classpath.add(other.toPath());
+                }
+            }
+            D8Command.Builder b = D8Command.builder(handler(log, true))
+                    .addProgramFiles(jar.toPath())
+                    .addLibraryFiles(job.androidJar.toPath())
+                    .setMinApiLevel(job.minSdk)
+                    .setMode(CompilationMode.DEBUG)
+                    .setIntermediate(true)
+                    .setOutput(tmp.toPath(), OutputMode.DexIndexed);
+            if (!classpath.isEmpty()) {
+                b.addClasspathFiles(classpath);
+            }
+            try {
+                D8.run(b.build());
+            } catch (CompilationFailedException e) {
+                IoUtil.deleteRecursively(tmp);
+                throw new IOException("D8 could not convert " + jar.getName() + ": " + e.getMessage(), e);
+            }
+        }
+        if (!tmp.renameTo(dir)) {
+            throw new IOException("Cannot store the converted " + jar.getName());
+        }
+        DexCache.markComplete(dir);
     }
 
     private static void collectClasses(File dir, List<Path> out) {

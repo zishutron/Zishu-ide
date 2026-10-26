@@ -53,6 +53,12 @@ final class KotlinRunner {
     }
 
     static void compile(Context ctx, final OnDeviceTools.KotlinJob job, File androidJar, final BuildLog log) throws ToolException {
+        for (File f : job.sourceFiles) {
+            if (!f.isFile()) {
+                throw new ToolException("A source file is missing before the Kotlin compiler starts: " + f
+                        + " (parent folder " + (f.getParentFile() != null && f.getParentFile().isDirectory() ? "exists" : "is missing") + ").");
+            }
+        }
         ClassLoader cl = prepare(ctx, job.version, job.compilerJars, androidJar, log);
         job.kotlinHome = toolchainDir(ctx, job.version);
         ensurePluginRoot(new File(job.kotlinHome, "plugin-root"), job.compilerJars);

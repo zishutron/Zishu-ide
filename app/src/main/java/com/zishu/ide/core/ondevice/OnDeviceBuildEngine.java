@@ -154,8 +154,10 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             cancel.throwIfCancelled();
 
             // 2. Kotlin (optional), then Java
+            List<File> generated = new ArrayList<File>();
+            collectJava(rj.genDir, generated);
             List<File> sources = new ArrayList<File>(plan.javaSources);
-            collectJava(rj.genDir, sources);
+            sources.addAll(generated);
             List<File> classpath = new ArrayList<File>();
             classpath.add(tools.androidJar());
             classpath.addAll(plan.libJars);
@@ -171,9 +173,24 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 kj.version = plan.kotlinVersion;
                 kj.compilerJars = KotlinSupport.resolveCompiler(maven, log, plan.kotlinVersion);
                 cancel.throwIfCancelled();
+                // R.java and Manifest.java are compiled first (they only hold constants) and given to kotlinc as classes, which
+                // is how Gradle does it; only the project's own Java files go to kotlinc as sources (read for symbols).
+                File rClasses = new File(work, "r-classes");
+                rClasses.mkdirs();
+                if (!generated.isEmpty()) {
+                    OnDeviceTools.JavaJob rjob = new OnDeviceTools.JavaJob();
+                    rjob.sourceFiles = generated;
+                    rjob.classpath = new ArrayList<File>();
+                    rjob.classpath.add(tools.androidJar());
+                    rjob.outDir = rClasses;
+                    rjob.javaLevel = plan.javaLevel;
+                    tools.compileJava(rjob, log);
+                    cancel.throwIfCancelled();
+                }
                 kj.sourceFiles = new ArrayList<File>(plan.kotlinSources);
-                kj.sourceFiles.addAll(sources);
-                kj.classpath = classpath;
+                kj.sourceFiles.addAll(plan.javaSources);
+                kj.classpath = new ArrayList<File>(classpath);
+                kj.classpath.add(rClasses);
                 kj.outDir = classesDir;
                 kj.javaLevel = plan.javaLevel;
                 kj.moduleName = plan.manifestPackage.replace('.', '_');

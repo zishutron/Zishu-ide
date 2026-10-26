@@ -67,6 +67,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
         String variant = request.variant;
         BuildLog log = new BuildLog(listener);
         File work = new File(workRoot, "job-" + start);
+        StageTimer timer = new StageTimer(start);
         try {
             Status st = tools.status();
             if (!st.available) {
@@ -112,6 +113,8 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 cancel.throwIfCancelled();
             }
 
+            timer.mark("libraries");
+
             // 1. Manifest + resources
             listener.onStage(BuildStage.BUILD, "Compiling resources (aapt2)");
             listener.onProgress(10);
@@ -147,6 +150,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             rj.workDir.mkdirs();
             tools.compileResources(rj, log);
             requireFile(rj.outApk, "aapt2 did not produce the resource package");
+            timer.mark("resources");
             cancel.throwIfCancelled();
 
             // 2. Kotlin (optional), then Java
@@ -174,6 +178,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 kj.javaLevel = plan.javaLevel;
                 kj.moduleName = plan.manifestPackage.replace('.', '_');
                 tools.compileKotlin(kj, log);
+                timer.mark("Kotlin");
                 cancel.throwIfCancelled();
             }
             listener.onStage(BuildStage.BUILD, "Compiling Java");
@@ -190,6 +195,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             jj.javaLevel = plan.javaLevel;
             jj.outDir = classesDir;
             tools.compileJava(jj, log);
+            timer.mark("Java");
             cancel.throwIfCancelled();
 
             // 3. DEX
@@ -206,6 +212,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             dj.outDir = new File(work, "dex");
             dj.outDir.mkdirs();
             tools.dex(dj, log);
+            timer.mark("D8");
             Map<String, File> dexFiles = new LinkedHashMap<String, File>();
             File[] produced = dj.outDir.listFiles();
             if (produced != null) {
@@ -242,6 +249,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             File apk = uniqueApk(request.outputDir, plan.apkBaseName);
             tools.sign(unsigned, apk, log);
             requireFile(apk, "The signer did not produce an APK");
+            timer.mark("packaging and signing");
 
             listener.onStage(BuildStage.VERIFY, null);
             listener.onProgress(95);
@@ -250,6 +258,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
                 throw new ToolException("The APK was produced but is not signed, so it cannot be installed.");
             }
             log.line("APK verified: " + IoUtil.formatSize(info.sizeBytes));
+            log.line(timer.summary());
             listener.onStage(BuildStage.CLEANUP, null);
             IoUtil.deleteRecursively(work);
             listener.onProgress(100);

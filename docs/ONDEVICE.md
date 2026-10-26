@@ -78,9 +78,3 @@ The compiler needs more than its POM lists: `stax-api` (javax.xml.stream), `kotl
 ## First-run setup (AndroidX + Kotlin)
 
 When the app opens it looks at what is really on the phone. If the AndroidX starter libraries (AppCompat, Core KTX, ConstraintLayout, Material) or the converted Kotlin compiler are missing, it asks once whether to download them. **Download** opens the terminal and runs `zishu setup all`; **Later** asks again the next time the app is opened. Nothing is asked when both are present (for example after a build already downloaded them). `zishu setup status` shows the state, `zishu setup androidx` / `zishu setup kotlin` do one part. Progress shows percent, size, speed and time left; the screen is kept awake while it runs.
-
-## Build speed
-
-- **Stage times.** After every successful build the log ends with a line such as `Time: libraries 3 s, resources 5 s, Kotlin 1 min 20 s, Java 12 s, D8 40 s, packaging and signing 2 s (total ...)`, so it is clear where the time went.
-- **Library dex cache.** D8 used to convert every library jar again in every build. Now each library jar is converted once (D8 intermediate output) and stored under `files/dexcache/<jar name>-<hash>/`; later builds merge the stored dex files with your own classes. The key holds the jar's path, size and modification time, the minSdk, the platform jar and the D8 version (`DexCache.ID`), so a changed library or a new D8 gets a new entry. The first build with new libraries is not faster (the libraries are converted then, one run each); the following builds are. If the cache cannot be used for any reason, the log says so and the build converts the libraries together with your code as before.
-- aapt2 already keeps the compiled resources of each library (`compiled-res.zip` next to the unpacked AAR), so library resources are not recompiled.

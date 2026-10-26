@@ -95,6 +95,10 @@ final class Aapt2Runner {
             l.add("-A");
             l.add(job.assetsDir.getAbsolutePath());
         }
+        if (job.symbolsFile != null) {
+            l.add("--output-text-symbols");
+            l.add(job.symbolsFile.getAbsolutePath());
+        }
         if (!job.extraPackages.isEmpty()) {
             StringBuilder pk = new StringBuilder();
             for (String p : job.extraPackages) {

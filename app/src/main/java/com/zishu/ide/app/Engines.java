@@ -58,7 +58,7 @@ public final class Engines {
     }
 
     public static OnDeviceBuildEngine onDevice(Context c) {
-        return new OnDeviceBuildEngine(new AndroidTools(c), new File(c.getCacheDir(), "ondevice"), mavenDependencies(c));
+        return new OnDeviceBuildEngine(new AndroidTools(c), new File(c.getFilesDir(), "build-work"), mavenDependencies(c));
     }
 
     /** The engine the user's choice and the phone's abilities select: "device", "cloud" or automatic. */

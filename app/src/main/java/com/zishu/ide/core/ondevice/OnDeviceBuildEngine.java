@@ -81,6 +81,7 @@ public final class OnDeviceBuildEngine implements BuildEngine {
             Plan plan = Plan.create(request, tools.androidJarApi(), maven != null, log);
             cancel.throwIfCancelled();
 
+            removeStaleJobs(workRoot, start);
             if (work.exists()) {
                 IoUtil.deleteRecursively(work);
             }
@@ -513,6 +514,23 @@ public final class OnDeviceBuildEngine implements BuildEngine {
      * Writes one small R.java per library package: only the resources that library declares (its R.txt), with the ids aapt2
      * gave them in this app. Needs the final symbol table written by aapt2 (--output-text-symbols).
      */
+    /** Work folders left behind by a killed build (older than two hours) are removed; a running build's folder is never that old. */
+    private static void removeStaleJobs(File root, long now) {
+        File[] old = root.listFiles();
+        if (old == null) {
+            return;
+        }
+        for (File f : old) {
+            if (f.isDirectory() && f.getName().startsWith("job-") && now - f.lastModified() > 2L * 60 * 60 * 1000) {
+                try {
+                    IoUtil.deleteRecursively(f);
+                } catch (IOException ignored) {
+                    // a leftover folder is harmless
+                }
+            }
+        }
+    }
+
     private static final String NO_SPACE = "The phone is out of storage space. Free some space (the build needs several hundred MB) and build again.";
 
     private static boolean noSpace(Throwable e) {

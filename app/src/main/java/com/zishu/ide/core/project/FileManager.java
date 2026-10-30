@@ -104,6 +104,30 @@ public final class FileManager {
         }
     }
 
+    /** Throws if any folder on the way to {@code rel} is a link: an import never goes through links. */
+    private void requireNoLinks(String rel) throws IOException {
+        String acc = "";
+        if (rel.length() == 0) {
+            return;
+        }
+        for (String seg : rel.split("/")) {
+            acc = acc.length() == 0 ? seg : acc + "/" + seg;
+            if (IoUtil.isSymlink(resolveNoFollow(acc))) {
+                throw new IOException("\"" + acc + "\" is a link. Choose a real folder.");
+            }
+        }
+    }
+
+    /** A new temporary folder for extracting a ZIP, inside the project's own metadata folder (which must be a real folder). */
+    public File newImportTempDir() throws IOException {
+        File meta = new File(root, METADATA_DIR);
+        if (IoUtil.isSymlink(meta)) {
+            throw new IOException("The project's .zishu folder is a link, so nothing can be imported safely.");
+        }
+        File tmp = resolve(METADATA_DIR + "/import-" + System.nanoTime());
+        return tmp;
+    }
+
     private File resolveNoFollow(String rel) {
         return new File(root, rel.replace('/', File.separatorChar));
     }
@@ -425,6 +449,7 @@ public final class FileManager {
         if (!dir.isDirectory()) {
             throw new IOException("Not a folder: " + relDir);
         }
+        requireNoLinks(relDir);
         String name = safeName(rawName);
         if (name.equals(METADATA_DIR)) {
             name = "zishu-file";
@@ -477,6 +502,7 @@ public final class FileManager {
 
     /** Project-relative paths of the files in {@code srcDir} that would land on a file the project already has. */
     public List<String> conflicts(File srcDir, String relDestDir) throws IOException {
+        requireNoLinks(relDestDir);
         List<String> out = new ArrayList<String>();
         collectConflicts(srcDir, relDestDir, out, 0);
         return out;
@@ -523,7 +549,7 @@ public final class FileManager {
     }
 
     /** Puts {@code from} in place of the existing file {@code to}; if that fails the old file is put back. */
-    private static void replaceFile(File from, File to) throws IOException {
+    public static void replaceFile(File from, File to) throws IOException {
         File backup = new File(to.getParentFile(), ".zishu-old-" + System.nanoTime() + ".tmp");
         if (!to.renameTo(backup)) {
             throw new IOException("Could not replace " + to.getName());
@@ -593,6 +619,7 @@ public final class FileManager {
         if (!dest.isDirectory()) {
             throw new IOException("Not a folder: " + relDestDir);
         }
+        requireNoLinks(relDestDir);
         MergeResult r = new MergeResult();
         mergeInto(srcDir, dest, relDestDir, r, onConflict, 0);
         return r;

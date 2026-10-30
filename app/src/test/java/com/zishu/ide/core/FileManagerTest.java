@@ -322,4 +322,52 @@ public class FileManagerTest {
         IoUtil.writeUtf8Atomic(new File(z3, "Dir/b.txt"), "x");
         assertEquals(z3, FileManager.unwrapSingleFolder(z3));
     }
+
+    @Test
+    public void importStreamPolicies() throws Exception {
+        IoUtil.writeUtf8Atomic(new File(root, "a.txt"), "old");
+        assertTrue(fm.fileExists("", "a.txt"));
+        assertEquals(null, fm.importStream("", "a.txt", new ByteArrayInputStream("new".getBytes("UTF-8")), 100, FileManager.Conflict.SKIP));
+        assertEquals("old", IoUtil.readUtf8(new File(root, "a.txt"), 100));
+        assertEquals("a.txt", fm.importStream("", "a.txt", new ByteArrayInputStream("new".getBytes("UTF-8")), 100, FileManager.Conflict.REPLACE));
+        assertEquals("new", IoUtil.readUtf8(new File(root, "a.txt"), 100));
+        assertEquals("a (1).txt", fm.importStream("", "a.txt", new ByteArrayInputStream("x".getBytes("UTF-8")), 100, FileManager.Conflict.KEEP_BOTH));
+        assertEquals("new", IoUtil.readUtf8(new File(root, "a.txt"), 100));
+        // a failed replace keeps the old file
+        try {
+            fm.importStream("", "a.txt", new ByteArrayInputStream(new byte[500]), 100, FileManager.Conflict.REPLACE);
+            fail("too large");
+        } catch (IOException expected) {
+            assertEquals("new", IoUtil.readUtf8(new File(root, "a.txt"), 100));
+        }
+        // a folder with that name is never replaced by a file
+        fm.createDirectory("", "dir");
+        assertEquals("dir (1)", fm.importStream("", "dir", new ByteArrayInputStream(new byte[1]), 100, FileManager.Conflict.REPLACE));
+        assertTrue(new File(root, "dir").isDirectory());
+    }
+
+    @Test
+    public void mergeReplaceSkipAndConflictList() throws Exception {
+        fm.createDirectory("", "res");
+        IoUtil.writeUtf8Atomic(new File(root, "res/a.txt"), "mine");
+        IoUtil.writeUtf8Atomic(new File(root, "keep.txt"), "keep");
+        File src = tmp.newFolder("zip2");
+        IoUtil.writeUtf8Atomic(new File(src, "res/a.txt"), "theirs");
+        IoUtil.writeUtf8Atomic(new File(src, "res/b.txt"), "new");
+        assertEquals(java.util.Arrays.asList("res/a.txt"), fm.conflicts(src, ""));
+        FileManager.MergeResult r = fm.mergeDirectory(src, "", FileManager.Conflict.REPLACE);
+        assertEquals(2, r.added);
+        assertEquals(1, r.replaced);
+        assertEquals(java.util.Arrays.asList("res/a.txt"), r.replacedPaths);
+        assertEquals("theirs", IoUtil.readUtf8(new File(root, "res/a.txt"), 100));
+        assertEquals("keep", IoUtil.readUtf8(new File(root, "keep.txt"), 100));
+
+        File src2 = tmp.newFolder("zip3");
+        IoUtil.writeUtf8Atomic(new File(src2, "res/a.txt"), "third");
+        IoUtil.writeUtf8Atomic(new File(src2, "res/c.txt"), "c");
+        FileManager.MergeResult s2 = fm.mergeDirectory(src2, "", FileManager.Conflict.SKIP);
+        assertEquals(1, s2.added);
+        assertEquals(1, s2.skipped);
+        assertEquals("theirs", IoUtil.readUtf8(new File(root, "res/a.txt"), 100));
+    }
 }

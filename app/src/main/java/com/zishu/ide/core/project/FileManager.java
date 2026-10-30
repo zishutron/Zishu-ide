@@ -104,6 +104,10 @@ public final class FileManager {
         }
     }
 
+    private File resolveNoFollow(String rel) {
+        return new File(root, rel.replace('/', File.separatorChar));
+    }
+
     private String relOf(File f) throws IOException {
         String canonical = f.getCanonicalPath();
         if (canonical.equals(rootCanonical)) {
@@ -422,6 +426,9 @@ public final class FileManager {
             throw new IOException("Not a folder: " + relDir);
         }
         String name = safeName(rawName);
+        if (name.equals(METADATA_DIR)) {
+            name = "zishu-file";
+        }
         File existing = new File(dir, name);
         if (existing.exists()) {
             if (onConflict == Conflict.SKIP) {
@@ -447,10 +454,9 @@ public final class FileManager {
                 out.write(buf, 0, n);
             }
             out.close();
-            if (dest.isFile() && !dest.delete()) {
-                throw new IOException("Could not replace " + name);
-            }
-            if (!tmp.renameTo(dest)) {
+            if (dest.isFile()) {
+                replaceFile(tmp, dest);
+            } else if (!tmp.renameTo(dest)) {
                 throw new IOException("Could not save " + name);
             }
             ok = true;
@@ -483,16 +489,57 @@ public final class FileManager {
         }
         Arrays.sort(kids);
         for (File k : kids) {
-            if (IoUtil.isSymlink(k)) {
+            if (IoUtil.isSymlink(k) || k.getName().equals(METADATA_DIR)) {
                 continue;
             }
             String rel = childPath(relDir, k.getName());
+            if (IoUtil.isSymlink(resolveNoFollow(rel))) {
+                continue;
+            }
             if (k.isDirectory()) {
                 collectConflicts(k, rel, out, depth + 1);
             } else if (resolve(rel).isFile()) {
                 out.add(rel);
             }
         }
+    }
+
+    private static final String METADATA_DIR = ".zishu";
+
+    private static void moveFile(File from, File to) throws IOException {
+        if (from.renameTo(to)) {
+            return;
+        }
+        FileInputStream fin = new FileInputStream(from);
+        try {
+            importStreamTo(to, fin);
+        } catch (IOException e) {
+            to.delete();
+            throw e;
+        } finally {
+            IoUtil.closeQuietly(fin);
+        }
+        from.delete();
+    }
+
+    /** Puts {@code from} in place of the existing file {@code to}; if that fails the old file is put back. */
+    private static void replaceFile(File from, File to) throws IOException {
+        File backup = new File(to.getParentFile(), ".zishu-old-" + System.nanoTime() + ".tmp");
+        if (!to.renameTo(backup)) {
+            throw new IOException("Could not replace " + to.getName());
+        }
+        try {
+            moveFile(from, to);
+        } catch (IOException e) {
+            to.delete();
+            backup.renameTo(to);
+            throw e;
+        } catch (RuntimeException e) {
+            to.delete();
+            backup.renameTo(to);
+            throw e;
+        }
+        backup.delete();
     }
 
     private static void importStreamTo(File target, java.io.InputStream in) throws IOException {
@@ -561,11 +608,16 @@ public final class FileManager {
         }
         Arrays.sort(kids);
         for (File k : kids) {
-            if (IoUtil.isSymlink(k)) {
-                continue;
+            if (IoUtil.isSymlink(k) || k.getName().equals(METADATA_DIR)) {
+                continue; // links are never imported, and a ZIP cannot touch the IDE's own project data
             }
             File target = new File(dest, k.getName());
             String targetRel = childPath(rel, k.getName());
+            if (IoUtil.isSymlink(target)) {
+                r.skipped++; // a link inside the project is never followed or replaced
+                continue;
+            }
+            resolve(targetRel); // must stay inside the project
             if (k.isDirectory()) {
                 if (target.exists() && !target.isDirectory()) {
                     if (onConflict == Conflict.SKIP) {
@@ -596,17 +648,10 @@ public final class FileManager {
                     r.renamed++;
                 }
             }
-            if (replacing && !target.delete()) {
-                throw new IOException("Could not replace " + k.getName());
-            }
-            if (!k.renameTo(target)) {
-                FileInputStream fin = new FileInputStream(k);
-                try {
-                    importStreamTo(target, fin);
-                } finally {
-                    IoUtil.closeQuietly(fin);
-                }
-                k.delete();
+            if (replacing) {
+                replaceFile(k, target);
+            } else {
+                moveFile(k, target);
             }
             r.added++;
             if (replacing) {

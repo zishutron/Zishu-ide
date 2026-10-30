@@ -354,11 +354,25 @@ public final class FileManager {
 
     // ---- import and search ----
 
+    /** What to do when an imported file has the name of a file that is already in the project. */
+    public enum Conflict {
+        /** The new file gets a free name: "Main (1).java". */
+        KEEP_BOTH,
+        /** The old file is replaced by the new one. */
+        REPLACE,
+        /** The new file is not added. */
+        SKIP
+    }
+
     /** Result of {@link #mergeDirectory}. */
     public static final class MergeResult {
         public int added;
-        /** Files that kept their name because the name was free: added minus renamed. */
+        /** Added under a new name because the name was taken (KEEP_BOTH). */
         public int renamed;
+        /** Old files that were replaced (REPLACE); their project-relative paths are in {@link #replacedPaths}. */
+        public int replaced;
+        public int skipped;
+        public final List<String> replacedPaths = new ArrayList<String>();
     }
 
     /** Replaces characters a file name cannot have, so a name supplied by another app can be used. */
@@ -393,16 +407,30 @@ public final class FileManager {
         return base + " (" + System.nanoTime() + ")" + ext;
     }
 
+    public String importStream(String relDir, String rawName, java.io.InputStream in, long maxBytes) throws IOException {
+        return importStream(relDir, rawName, in, maxBytes, Conflict.KEEP_BOTH);
+    }
+
     /**
      * Copies a stream (any file type, any size up to maxBytes) into a folder of the project without holding it in memory.
-     * An existing file is never replaced: the new one gets a free name. Returns the project-relative path.
+     * If the name is taken, {@code onConflict} decides: a free name, replacing the old file, or nothing (returns null).
+     * Returns the project-relative path of the new file.
      */
-    public String importStream(String relDir, String rawName, java.io.InputStream in, long maxBytes) throws IOException {
+    public String importStream(String relDir, String rawName, java.io.InputStream in, long maxBytes, Conflict onConflict) throws IOException {
         File dir = resolve(relDir);
         if (!dir.isDirectory()) {
             throw new IOException("Not a folder: " + relDir);
         }
-        String name = freeName(dir, safeName(rawName));
+        String name = safeName(rawName);
+        File existing = new File(dir, name);
+        if (existing.exists()) {
+            if (onConflict == Conflict.SKIP) {
+                return null;
+            }
+            if (onConflict == Conflict.KEEP_BOTH || existing.isDirectory()) {
+                name = freeName(dir, name);
+            }
+        }
         File dest = resolve(childPath(relDir, name));
         File tmp = new File(dir, ".zishu-import-" + System.nanoTime() + ".tmp");
         FileOutputStream out = new FileOutputStream(tmp);
@@ -419,6 +447,9 @@ public final class FileManager {
                 out.write(buf, 0, n);
             }
             out.close();
+            if (dest.isFile() && !dest.delete()) {
+                throw new IOException("Could not replace " + name);
+            }
             if (!tmp.renameTo(dest)) {
                 throw new IOException("Could not save " + name);
             }
@@ -430,6 +461,38 @@ public final class FileManager {
             }
         }
         return childPath(relDir, name);
+    }
+
+    /** True when a file (not a folder) with this name is already in the project folder. */
+    public boolean fileExists(String relDir, String rawName) throws IOException {
+        File f = resolve(childPath(relDir, safeName(rawName)));
+        return f.isFile();
+    }
+
+    /** Project-relative paths of the files in {@code srcDir} that would land on a file the project already has. */
+    public List<String> conflicts(File srcDir, String relDestDir) throws IOException {
+        List<String> out = new ArrayList<String>();
+        collectConflicts(srcDir, relDestDir, out, 0);
+        return out;
+    }
+
+    private void collectConflicts(File src, String relDir, List<String> out, int depth) throws IOException {
+        File[] kids = src.listFiles();
+        if (kids == null || depth > 40) {
+            return;
+        }
+        Arrays.sort(kids);
+        for (File k : kids) {
+            if (IoUtil.isSymlink(k)) {
+                continue;
+            }
+            String rel = childPath(relDir, k.getName());
+            if (k.isDirectory()) {
+                collectConflicts(k, rel, out, depth + 1);
+            } else if (resolve(rel).isFile()) {
+                out.add(rel);
+            }
+        }
     }
 
     private static void importStreamTo(File target, java.io.InputStream in) throws IOException {
@@ -469,21 +532,26 @@ public final class FileManager {
         return kids[0];
     }
 
+    public MergeResult mergeDirectory(File srcDir, String relDestDir) throws IOException {
+        return mergeDirectory(srcDir, relDestDir, Conflict.KEEP_BOTH);
+    }
+
     /**
      * Moves everything inside {@code srcDir} (a folder outside the project, for example a ZIP extracted to a temporary place)
-     * into a project folder, keeping its sub-folders. A file that already exists is kept and the new one is added under a free name ("Main (1).java").
+     * into a project folder, keeping its sub-folders. When a file with the same name exists, {@code onConflict} decides:
+     * the new file is added as "Main (1).java", replaces the old one, or is skipped.
      */
-    public MergeResult mergeDirectory(File srcDir, String relDestDir) throws IOException {
+    public MergeResult mergeDirectory(File srcDir, String relDestDir, Conflict onConflict) throws IOException {
         File dest = resolve(relDestDir);
         if (!dest.isDirectory()) {
             throw new IOException("Not a folder: " + relDestDir);
         }
         MergeResult r = new MergeResult();
-        mergeInto(srcDir, dest, r, 0);
+        mergeInto(srcDir, dest, relDestDir, r, onConflict, 0);
         return r;
     }
 
-    private void mergeInto(File src, File dest, MergeResult r, int depth) throws IOException {
+    private void mergeInto(File src, File dest, String rel, MergeResult r, Conflict onConflict, int depth) throws IOException {
         if (depth > 40) {
             throw new IOException("The folders are nested too deeply");
         }
@@ -497,24 +565,41 @@ public final class FileManager {
                 continue;
             }
             File target = new File(dest, k.getName());
+            String targetRel = childPath(rel, k.getName());
             if (k.isDirectory()) {
                 if (target.exists() && !target.isDirectory()) {
+                    if (onConflict == Conflict.SKIP) {
+                        r.skipped++;
+                        continue;
+                    }
                     target = new File(dest, freeName(dest, k.getName()));
+                    targetRel = childPath(rel, target.getName());
                     r.renamed++;
                 }
                 if (!target.isDirectory() && !target.mkdirs()) {
                     throw new IOException("Cannot create " + target.getName());
                 }
-                mergeInto(k, target, r, depth + 1);
-            } else {
-                if (target.exists()) {
-                    target = new File(dest, freeName(dest, k.getName()));
-                    r.renamed++;
-                }
-                if (k.renameTo(target)) {
-                    r.added++;
+                mergeInto(k, target, targetRel, r, onConflict, depth + 1);
+                continue;
+            }
+            boolean replacing = false;
+            if (target.exists()) {
+                if (onConflict == Conflict.SKIP) {
+                    r.skipped++;
                     continue;
                 }
+                if (onConflict == Conflict.REPLACE && target.isFile()) {
+                    replacing = true;
+                } else {
+                    target = new File(dest, freeName(dest, k.getName()));
+                    targetRel = childPath(rel, target.getName());
+                    r.renamed++;
+                }
+            }
+            if (replacing && !target.delete()) {
+                throw new IOException("Could not replace " + k.getName());
+            }
+            if (!k.renameTo(target)) {
                 FileInputStream fin = new FileInputStream(k);
                 try {
                     importStreamTo(target, fin);
@@ -522,7 +607,11 @@ public final class FileManager {
                     IoUtil.closeQuietly(fin);
                 }
                 k.delete();
-                r.added++;
+            }
+            r.added++;
+            if (replacing) {
+                r.replaced++;
+                r.replacedPaths.add(targetRel);
             }
         }
     }

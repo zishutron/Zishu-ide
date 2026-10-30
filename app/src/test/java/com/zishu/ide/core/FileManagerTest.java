@@ -422,4 +422,53 @@ public class FileManagerTest {
             assertFalse(n, n.endsWith(".tmp"));
         }
     }
+
+    @Test
+    public void replaceRollsBackWhenTheNewFileCannotBeMoved() throws Exception {
+        File old = new File(root, "a.txt");
+        IoUtil.writeUtf8Atomic(old, "old");
+        try {
+            FileManager.replaceFile(new File(root, "does-not-exist.tmp"), old);
+            fail("the source is missing");
+        } catch (IOException expected) {
+            assertEquals("old", IoUtil.readUtf8(old, 100));
+            for (String n : root.list()) {
+                assertFalse(n, n.startsWith(".zishu-old-"));
+            }
+        }
+    }
+
+    @Test
+    public void importNeverGoesThroughLinkedFoldersOrAMetadataLink() throws Exception {
+        fm.createDirectory("", "real");
+        IoUtil.writeUtf8Atomic(new File(root, "real/secret.txt"), "original");
+        try {
+            java.nio.file.Files.createSymbolicLink(new File(root, "alias").toPath(), new File(root, "real").toPath());
+        } catch (UnsupportedOperationException e) {
+            return;
+        }
+        File src = tmp.newFolder("zip-alias");
+        IoUtil.writeUtf8Atomic(new File(src, "secret.txt"), "ZIP-CONTENT");
+        try {
+            fm.mergeDirectory(src, "alias", FileManager.Conflict.REPLACE);
+            fail("alias is a link");
+        } catch (IOException expected) {
+            assertEquals("original", IoUtil.readUtf8(new File(root, "real/secret.txt"), 100));
+        }
+        try {
+            fm.importStream("alias", "secret.txt", new ByteArrayInputStream(new byte[2]), 100, FileManager.Conflict.REPLACE);
+            fail("alias is a link");
+        } catch (IOException expected) {
+            assertEquals("original", IoUtil.readUtf8(new File(root, "real/secret.txt"), 100));
+        }
+        // .zishu itself is a link: no temporary extraction folder
+        File outside = tmp.newFolder("meta-outside");
+        java.nio.file.Files.createSymbolicLink(new File(root, ".zishu").toPath(), outside.toPath());
+        try {
+            fm.newImportTempDir();
+            fail(".zishu is a link");
+        } catch (IOException expected) {
+            assertEquals(0, outside.list().length);
+        }
+    }
 }

@@ -352,6 +352,185 @@ public final class FileManager {
         IoUtil.writeAtomic(f, out.getBytes(IoUtil.UTF8));
     }
 
+    // ---- import and search ----
+
+    /** Result of {@link #mergeDirectory}. */
+    public static final class MergeResult {
+        public int added;
+        /** Files that kept their name because the name was free: added minus renamed. */
+        public int renamed;
+    }
+
+    /** Replaces characters a file name cannot have, so a name supplied by another app can be used. */
+    public static String safeName(String raw) {
+        String n = raw == null ? "" : raw.trim();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n.length(); i++) {
+            char c = n.charAt(i);
+            sb.append(c < 0x20 || "/\\:*?\"<>|".indexOf(c) >= 0 ? '_' : c);
+        }
+        String r = sb.toString();
+        if (r.length() == 0 || r.equals(".") || r.equals("..")) {
+            return "file";
+        }
+        return r.length() > 200 ? r.substring(r.length() - 200) : r;
+    }
+
+    /** "photo.png" becomes "photo (1).png", "photo (2).png" ... until the name is free in {@code dir}. */
+    public static String freeName(File dir, String name) {
+        if (!new File(dir, name).exists()) {
+            return name;
+        }
+        int dot = name.lastIndexOf('.');
+        String base = dot > 0 ? name.substring(0, dot) : name;
+        String ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 1; i < 10000; i++) {
+            String c = base + " (" + i + ")" + ext;
+            if (!new File(dir, c).exists()) {
+                return c;
+            }
+        }
+        return base + " (" + System.nanoTime() + ")" + ext;
+    }
+
+    /**
+     * Copies a stream (any file type, any size up to maxBytes) into a folder of the project without holding it in memory.
+     * An existing file is never replaced: the new one gets a free name. Returns the project-relative path.
+     */
+    public String importStream(String relDir, String rawName, java.io.InputStream in, long maxBytes) throws IOException {
+        File dir = resolve(relDir);
+        if (!dir.isDirectory()) {
+            throw new IOException("Not a folder: " + relDir);
+        }
+        String name = freeName(dir, safeName(rawName));
+        File dest = resolve(childPath(relDir, name));
+        File tmp = new File(dir, ".zishu-import-" + System.nanoTime() + ".tmp");
+        FileOutputStream out = new FileOutputStream(tmp);
+        boolean ok = false;
+        try {
+            byte[] buf = new byte[64 * 1024];
+            long total = 0;
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                total += n;
+                if (total > maxBytes) {
+                    throw new IOException("\"" + name + "\" is larger than " + IoUtil.formatSize(maxBytes));
+                }
+                out.write(buf, 0, n);
+            }
+            out.close();
+            if (!tmp.renameTo(dest)) {
+                throw new IOException("Could not save " + name);
+            }
+            ok = true;
+        } finally {
+            IoUtil.closeQuietly(out);
+            if (!ok) {
+                tmp.delete();
+            }
+        }
+        return childPath(relDir, name);
+    }
+
+    private static void importStreamTo(File target, java.io.InputStream in) throws IOException {
+        FileOutputStream out = new FileOutputStream(target);
+        try {
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+            }
+        } finally {
+            IoUtil.closeQuietly(out);
+        }
+    }
+
+    /**
+     * Moves everything inside {@code srcDir} (a folder outside the project, for example a ZIP extracted to a temporary place)
+     * into a project folder, keeping its sub-folders. A file that already exists is kept and the new one is added under a free name ("Main (1).java").
+     */
+    public MergeResult mergeDirectory(File srcDir, String relDestDir) throws IOException {
+        File dest = resolve(relDestDir);
+        if (!dest.isDirectory()) {
+            throw new IOException("Not a folder: " + relDestDir);
+        }
+        MergeResult r = new MergeResult();
+        mergeInto(srcDir, dest, r, 0);
+        return r;
+    }
+
+    private void mergeInto(File src, File dest, MergeResult r, int depth) throws IOException {
+        if (depth > 40) {
+            throw new IOException("The folders are nested too deeply");
+        }
+        File[] kids = src.listFiles();
+        if (kids == null) {
+            return;
+        }
+        Arrays.sort(kids);
+        for (File k : kids) {
+            if (IoUtil.isSymlink(k)) {
+                continue;
+            }
+            File target = new File(dest, k.getName());
+            if (k.isDirectory()) {
+                if (target.exists() && !target.isDirectory()) {
+                    target = new File(dest, freeName(dest, k.getName()));
+                    r.renamed++;
+                }
+                if (!target.isDirectory() && !target.mkdirs()) {
+                    throw new IOException("Cannot create " + target.getName());
+                }
+                mergeInto(k, target, r, depth + 1);
+            } else {
+                if (target.exists()) {
+                    target = new File(dest, freeName(dest, k.getName()));
+                    r.renamed++;
+                }
+                if (k.renameTo(target)) {
+                    r.added++;
+                    continue;
+                }
+                FileInputStream fin = new FileInputStream(k);
+                try {
+                    importStreamTo(target, fin);
+                } finally {
+                    IoUtil.closeQuietly(fin);
+                }
+                k.delete();
+                r.added++;
+            }
+        }
+    }
+
+    /** Files and folders whose name contains {@code query} (any case), anywhere in the project, at most {@code max} of them. */
+    public List<FileNode> search(String query, int max) throws IOException {
+        List<FileNode> out = new ArrayList<FileNode>();
+        String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.US);
+        if (q.length() == 0) {
+            return out;
+        }
+        searchIn("", q, max, out, 0);
+        return out;
+    }
+
+    private void searchIn(String rel, String q, int max, List<FileNode> out, int depth) throws IOException {
+        if (depth > 25) {
+            return;
+        }
+        for (FileNode n : list(rel)) {
+            if (out.size() >= max) {
+                return;
+            }
+            if (n.name.toLowerCase(java.util.Locale.US).contains(q)) {
+                out.add(n);
+            }
+            if (n.directory && !IoUtil.isSymlink(resolve(n.path))) {
+                searchIn(n.path, q, max, out, depth + 1);
+            }
+        }
+    }
+
     public boolean exists(String rel) throws IOException {
         return resolve(rel).exists();
     }

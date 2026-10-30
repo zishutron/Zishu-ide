@@ -308,4 +308,18 @@ public class FileManagerTest {
         assertEquals(0, fm.search("   ", 10).size());
         assertEquals(1, fm.search("notes", 1).size());
     }
+
+    @Test
+    public void unwrapSingleFolderOnlyForAWrapperFolder() throws Exception {
+        File z = tmp.newFolder("z1");
+        IoUtil.writeUtf8Atomic(new File(z, "ZishuOS/app/build.gradle"), "x");
+        assertEquals(new File(z, "ZishuOS"), FileManager.unwrapSingleFolder(z));
+        File z2 = tmp.newFolder("z2");
+        IoUtil.writeUtf8Atomic(new File(z2, "app/src/A.java"), "x");
+        assertEquals(z2, FileManager.unwrapSingleFolder(z2));
+        File z3 = tmp.newFolder("z3");
+        IoUtil.writeUtf8Atomic(new File(z3, "a.txt"), "x");
+        IoUtil.writeUtf8Atomic(new File(z3, "Dir/b.txt"), "x");
+        assertEquals(z3, FileManager.unwrapSingleFolder(z3));
+    }
 }

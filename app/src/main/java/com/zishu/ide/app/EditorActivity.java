@@ -446,16 +446,16 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
         explorerTarget.setEllipsize(TextUtils.TruncateAt.MIDDLE);
         titles.addView(explorerTarget);
         head.addView(titles, Ui.weight(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        head.addView(Ui.iconButton(this, pal, R.drawable.ic_file, "New file", new View.OnClickListener() {
+        head.addView(Ui.iconButton(this, pal, R.drawable.ic_add, "Add", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                promptCreate(selectedDir, false);
+                showAddMenu(v);
             }
         }));
-        head.addView(Ui.iconButton(this, pal, R.drawable.ic_folder, "New folder", new View.OnClickListener() {
+        head.addView(Ui.iconButton(this, pal, R.drawable.ic_search, "Search files", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                promptCreate(selectedDir, true);
+                showSearch();
             }
         }));
         panel.addView(head);
@@ -573,6 +573,239 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
             }
         });
         m.show();
+    }
+
+    // ------------------------------------------------------------------ add menu, import, search
+
+    private static final int REQ_IMPORT = 41;
+    private String importDir = "";
+
+    private void showAddMenu(View anchor) {
+        PopupMenu m = new PopupMenu(this, anchor);
+        m.getMenu().add(0, 1, 0, "Add file");
+        m.getMenu().add(0, 2, 1, "Add folder");
+        m.getMenu().add(0, 3, 2, "Import file");
+        m.getMenu().add(0, 4, 3, "Create new project");
+        m.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(android.view.MenuItem item) {
+                switch (item.getItemId()) {
+                    case 1:
+                        promptCreate(selectedDir, false);
+                        break;
+                    case 2:
+                        promptCreate(selectedDir, true);
+                        break;
+                    case 3:
+                        startImport();
+                        break;
+                    default:
+                        startActivity(new Intent(EditorActivity.this, NewProjectActivity.class));
+                }
+                return true;
+            }
+        });
+        m.show();
+    }
+
+    /** Opens the system file picker (images, video, audio, ZIP, anything); the files go into the selected folder. */
+    private void startImport() {
+        importDir = selectedDir;
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        try {
+            startActivityForResult(i, REQ_IMPORT);
+        } catch (RuntimeException e) {
+            toast("No file picker is available on this phone.");
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_IMPORT || resultCode != RESULT_OK || data == null) {
+            return;
+        }
+        final List<android.net.Uri> uris = new ArrayList<android.net.Uri>();
+        if (data.getClipData() != null) {
+            for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                uris.add(data.getClipData().getItemAt(i).getUri());
+            }
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if (uris.isEmpty()) {
+            return;
+        }
+        final String dir = importDir;
+        toast("Importing " + uris.size() + " file(s)...");
+        worker.execute(new Runnable() {
+            @Override
+            public void run() {
+                int files = 0;
+                int renamed = 0;
+                String failure = null;
+                for (android.net.Uri u : uris) {
+                    try {
+                        int[] r = importOne(u, dir);
+                        files += r[0];
+                        renamed += r[1];
+                    } catch (IOException e) {
+                        failure = e.getMessage();
+                    } catch (RuntimeException e) {
+                        failure = "Could not read the selected file: " + e.getMessage();
+                    }
+                }
+                final String text = (files > 0 ? "Added " + files + " file(s)" : "Nothing was added")
+                        + (renamed > 0 ? " (" + renamed + " got a new name like \"Name (1).ext\" because that name already existed)" : "")
+                        + (failure != null ? ". Problem: " + failure : ".");
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (dir.length() > 0) {
+                            expanded.add(dir);
+                        }
+                        refreshExplorer();
+                        toast(text);
+                    }
+                });
+            }
+        });
+    }
+
+    /** Imports one picked file. A ZIP is extracted into the folder instead; returns {files added, files that got a new name}. */
+    private int[] importOne(android.net.Uri uri, String dir) throws IOException {
+        String name = DocumentIo.displayName(getContentResolver(), uri);
+        java.io.InputStream in = DocumentIo.open(getContentResolver(), uri);
+        try {
+            if (name.toLowerCase(Locale.US).endsWith(".zip")) {
+                File tmp = new File(project.dir, ".zishu/import-" + System.nanoTime());
+                try {
+                    com.zishu.ide.core.project.SafeZip.extract(in, tmp, new com.zishu.ide.core.project.SafeZip.Limits());
+                    FileManager.MergeResult r = fm.mergeDirectory(tmp, dir);
+                    return new int[]{r.added, r.renamed};
+                } finally {
+                    try {
+                        com.zishu.ide.core.util.IoUtil.deleteRecursively(tmp);
+                    } catch (IOException ignored) {
+                        // a leftover temporary folder is harmless
+                    }
+                }
+            }
+            fm.importStream(dir, name, in, 500L * 1024 * 1024);
+            return new int[]{1, 0};
+        } finally {
+            com.zishu.ide.core.util.IoUtil.closeQuietly(in);
+        }
+    }
+
+    private void showSearch() {
+        final Ui.Field f = Ui.field(this, pal, "Search files and folders", "name", "",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        final LinearLayout results = new LinearLayout(this);
+        results.setOrientation(LinearLayout.VERTICAL);
+        ScrollView sv = new ScrollView(this);
+        sv.addView(results);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        box.addView(f.view);
+        box.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)));
+        final AlertDialog d = Ui.dialog(this, pal).setTitle("Search").setView(box).setNegativeButton("Close", null).create();
+        final Runnable[] pending = new Runnable[1];
+        f.edit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (pending[0] != null) {
+                    handler.removeCallbacks(pending[0]);
+                }
+                final String q = s.toString();
+                pending[0] = new Runnable() {
+                    @Override
+                    public void run() {
+                        worker.execute(new Runnable() {
+                            @Override
+                            public void run() {
+                                List<FileManager.FileNode> found;
+                                try {
+                                    found = fm.search(q, 60);
+                                } catch (IOException e) {
+                                    found = new ArrayList<FileManager.FileNode>();
+                                }
+                                final List<FileManager.FileNode> shown = found;
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        showSearchResults(results, shown, q, d);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                };
+                handler.postDelayed(pending[0], 250);
+            }
+        });
+        d.show();
+    }
+
+    private void showSearchResults(LinearLayout results, List<FileManager.FileNode> found, String q, final AlertDialog d) {
+        results.removeAllViews();
+        if (found.isEmpty()) {
+            if (q.trim().length() > 0) {
+                results.addView(Ui.text(this, pal, "Nothing found.", Ui.Style.CAPTION));
+            }
+            return;
+        }
+        for (final FileManager.FileNode n : found) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(4), dp(8), dp(4), dp(8));
+            row.setBackground(Ui.ripple(pal, null));
+            row.setClickable(true);
+            row.addView(Ui.text(this, pal, (n.directory ? "[folder] " : "") + n.name, Ui.Style.BODY));
+            row.addView(Ui.text(this, pal, "/" + n.path, Ui.Style.CAPTION));
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    d.dismiss();
+                    revealInExplorer(n);
+                }
+            });
+            results.addView(row);
+        }
+    }
+
+    private void revealInExplorer(FileManager.FileNode n) {
+        int slash = n.path.lastIndexOf('/');
+        String parent = slash < 0 ? "" : n.path.substring(0, slash);
+        String acc = "";
+        if (parent.length() > 0) {
+            for (String part : parent.split("/")) {
+                acc = acc.length() == 0 ? part : acc + "/" + part;
+                expanded.add(acc);
+            }
+        }
+        if (n.directory) {
+            selectedDir = n.path;
+            expanded.add(n.path);
+            refreshExplorer();
+        } else {
+            selectedDir = parent;
+            refreshExplorer();
+            openFile(n.path);
+            explorerPanel.setVisibility(View.GONE);
+        }
     }
 
     private void promptCreate(final String dir, final boolean folder) {

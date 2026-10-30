@@ -445,6 +445,30 @@ public final class FileManager {
         }
     }
 
+    private static final java.util.Set<String> PROJECT_FOLDERS = new java.util.HashSet<String>(Arrays.asList(
+            "app", "src", "main", "java", "kotlin", "res", "assets", "libs", "jnilibs", "gradle", "build", "test", "androidtest"));
+
+    /**
+     * A ZIP made by zipping a folder holds just that folder ("ZishuOS/..."). The files should land in the project as if the
+     * ZIP had been opened: when the only entry is one folder, its contents are used instead. A folder that is itself a project
+     * folder (app, src, res ...) is kept, because then its name is part of the path the files belong to.
+     */
+    public static File unwrapSingleFolder(File dir) {
+        File[] kids = dir.listFiles();
+        if (kids == null || kids.length != 1 || !kids[0].isDirectory()
+                || PROJECT_FOLDERS.contains(kids[0].getName().toLowerCase(java.util.Locale.US))) {
+            return dir;
+        }
+        try {
+            if (IoUtil.isSymlink(kids[0])) {
+                return dir;
+            }
+        } catch (IOException e) {
+            return dir;
+        }
+        return kids[0];
+    }
+
     /**
      * Moves everything inside {@code srcDir} (a folder outside the project, for example a ZIP extracted to a temporary place)
      * into a project folder, keeping its sub-folders. A file that already exists is kept and the new one is added under a free name ("Main (1).java").

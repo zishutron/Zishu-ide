@@ -669,32 +669,187 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
             return;
         }
         final String dir = importDir;
-        toast("Importing " + uris.size() + " file(s)...");
+        toast("Reading " + uris.size() + " file(s)...");
         worker.execute(new Runnable() {
             @Override
             public void run() {
-                int files = 0;
-                int renamed = 0;
-                String failure = null;
+                final ImportJob job = new ImportJob(dir);
                 for (android.net.Uri u : uris) {
                     try {
-                        int[] r = importOne(u, dir);
-                        files += r[0];
-                        renamed += r[1];
+                        job.prepare(u);
                     } catch (IOException e) {
-                        failure = e.getMessage();
+                        job.failure = e.getMessage();
                     } catch (RuntimeException e) {
-                        failure = "Could not read the selected file: " + e.getMessage();
+                        job.failure = "Could not read the selected file: " + e.getMessage();
                     }
                 }
-                final String text = (files > 0 ? "Added " + files + " file(s)" : "Nothing was added")
-                        + (renamed > 0 ? " (" + renamed + " got a new name like \"Name (1).ext\" because that name already existed)" : "")
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (job.conflicts.isEmpty()) {
+                            runImport(job, FileManager.Conflict.KEEP_BOTH);
+                        } else {
+                            askConflict(job);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    /** One import: ZIPs are already extracted to temporary folders, other files are copied when the job runs. */
+    private final class ImportJob {
+        final String dir;
+        final List<android.net.Uri> plainUris = new ArrayList<android.net.Uri>();
+        final List<String> plainNames = new ArrayList<String>();
+        final List<File> extracted = new ArrayList<File>();
+        final List<String> conflicts = new ArrayList<String>();
+        String failure;
+
+        ImportJob(String dir) {
+            this.dir = dir;
+        }
+
+        void prepare(android.net.Uri uri) throws IOException {
+            String name = DocumentIo.displayName(getContentResolver(), uri);
+            if (name.toLowerCase(Locale.US).endsWith(".zip")) {
+                java.io.InputStream in = DocumentIo.open(getContentResolver(), uri);
+                File tmp = new File(project.dir, ".zishu/import-" + System.nanoTime());
+                try {
+                    com.zishu.ide.core.project.SafeZip.extract(in, tmp, new com.zishu.ide.core.project.SafeZip.Limits());
+                } finally {
+                    com.zishu.ide.core.util.IoUtil.closeQuietly(in);
+                }
+                File root = FileManager.unwrapSingleFolder(tmp);
+                extracted.add(tmp);
+                extractedRoots.add(root);
+                conflicts.addAll(fm.conflicts(root, dir));
+            } else {
+                plainUris.add(uri);
+                plainNames.add(name);
+                if (fm.fileExists(dir, name)) {
+                    conflicts.add(dir.length() == 0 ? FileManager.safeName(name) : dir + "/" + FileManager.safeName(name));
+                }
+            }
+        }
+
+        final List<File> extractedRoots = new ArrayList<File>();
+
+        void cleanup() {
+            for (File f : extracted) {
+                try {
+                    com.zishu.ide.core.util.IoUtil.deleteRecursively(f);
+                } catch (IOException ignored) {
+                    // a leftover temporary folder is harmless
+                }
+            }
+        }
+    }
+
+    private void askConflict(final ImportJob job) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(job.conflicts.size() == 1 ? "1 file already exists:" : job.conflicts.size() + " files already exist:");
+        for (int i = 0; i < job.conflicts.size() && i < 8; i++) {
+            sb.append("\n/").append(job.conflicts.get(i));
+        }
+        if (job.conflicts.size() > 8) {
+            sb.append("\n... and ").append(job.conflicts.size() - 8).append(" more");
+        }
+        sb.append("\n\nReplace deletes the old files and puts the new ones in their place. Keep both adds the new ones as \"Name (1).ext\". "
+                + "Skip leaves the old files and does not add the new ones. Back cancels the import.");
+        Ui.dialog(this, pal).setTitle("Same names found").setMessage(sb.toString())
+                .setPositiveButton("Replace", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        runImport(job, FileManager.Conflict.REPLACE);
+                    }
+                })
+                .setNeutralButton("Keep both", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        runImport(job, FileManager.Conflict.KEEP_BOTH);
+                    }
+                })
+                .setNegativeButton("Skip", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        runImport(job, FileManager.Conflict.SKIP);
+                    }
+                })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    @Override
+                    public void onCancel(DialogInterface d) {
+                        worker.execute(new Runnable() {
+                            @Override
+                            public void run() {
+                                job.cleanup();
+                            }
+                        });
+                        toast("Import cancelled. Nothing was changed.");
+                    }
+                }).show();
+    }
+
+    private void runImport(final ImportJob job, final FileManager.Conflict policy) {
+        toast("Importing...");
+        worker.execute(new Runnable() {
+            @Override
+            public void run() {
+                int added = 0;
+                int renamed = 0;
+                int replaced = 0;
+                int skipped = 0;
+                final List<String> replacedPaths = new ArrayList<String>();
+                String failure = job.failure;
+                try {
+                    for (File root : job.extractedRoots) {
+                        FileManager.MergeResult r = fm.mergeDirectory(root, job.dir, policy);
+                        added += r.added;
+                        renamed += r.renamed;
+                        replaced += r.replaced;
+                        skipped += r.skipped;
+                        replacedPaths.addAll(r.replacedPaths);
+                    }
+                    for (int i = 0; i < job.plainUris.size(); i++) {
+                        java.io.InputStream in = DocumentIo.open(getContentResolver(), job.plainUris.get(i));
+                        try {
+                            boolean existed = fm.fileExists(job.dir, job.plainNames.get(i));
+                            String path = fm.importStream(job.dir, job.plainNames.get(i), in, 500L * 1024 * 1024, policy);
+                            if (path == null) {
+                                skipped++;
+                            } else {
+                                added++;
+                                if (existed && policy == FileManager.Conflict.REPLACE) {
+                                    replaced++;
+                                    replacedPaths.add(path);
+                                } else if (existed) {
+                                    renamed++;
+                                }
+                            }
+                        } finally {
+                            com.zishu.ide.core.util.IoUtil.closeQuietly(in);
+                        }
+                    }
+                } catch (IOException e) {
+                    failure = e.getMessage();
+                } catch (RuntimeException e) {
+                    failure = "Could not read the selected file: " + e.getMessage();
+                } finally {
+                    job.cleanup();
+                }
+                final String text = (added > 0 ? "Added " + added + " file(s)" : "Nothing was added")
+                        + (replaced > 0 ? ", " + replaced + " replaced" : "")
+                        + (renamed > 0 ? ", " + renamed + " added as \"Name (1).ext\"" : "")
+                        + (skipped > 0 ? ", " + skipped + " skipped" : "")
                         + (failure != null ? ". Problem: " + failure : ".");
                 handler.post(new Runnable() {
                     @Override
                     public void run() {
-                        if (dir.length() > 0) {
-                            expanded.add(dir);
+                        for (String p : replacedPaths) {
+                            closeTabsUnder(p);
+                        }
+                        if (job.dir.length() > 0) {
+                            expanded.add(job.dir);
                         }
                         refreshExplorer();
                         toast(text);
@@ -702,32 +857,6 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
                 });
             }
         });
-    }
-
-    /** Imports one picked file. A ZIP is extracted into the folder instead; returns {files added, files that got a new name}. */
-    private int[] importOne(android.net.Uri uri, String dir) throws IOException {
-        String name = DocumentIo.displayName(getContentResolver(), uri);
-        java.io.InputStream in = DocumentIo.open(getContentResolver(), uri);
-        try {
-            if (name.toLowerCase(Locale.US).endsWith(".zip")) {
-                File tmp = new File(project.dir, ".zishu/import-" + System.nanoTime());
-                try {
-                    com.zishu.ide.core.project.SafeZip.extract(in, tmp, new com.zishu.ide.core.project.SafeZip.Limits());
-                    FileManager.MergeResult r = fm.mergeDirectory(FileManager.unwrapSingleFolder(tmp), dir);
-                    return new int[]{r.added, r.renamed};
-                } finally {
-                    try {
-                        com.zishu.ide.core.util.IoUtil.deleteRecursively(tmp);
-                    } catch (IOException ignored) {
-                        // a leftover temporary folder is harmless
-                    }
-                }
-            }
-            fm.importStream(dir, name, in, 500L * 1024 * 1024);
-            return new int[]{1, 0};
-        } finally {
-            com.zishu.ide.core.util.IoUtil.closeQuietly(in);
-        }
     }
 
     private void showSearch() {

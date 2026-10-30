@@ -714,7 +714,7 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
             String name = DocumentIo.displayName(getContentResolver(), uri);
             if (name.toLowerCase(Locale.US).endsWith(".zip")) {
                 java.io.InputStream in = DocumentIo.open(getContentResolver(), uri);
-                File tmp = new File(project.dir, ".zishu/import-" + System.nanoTime());
+                File tmp = fm.newImportTempDir();
                 try {
                     com.zishu.ide.core.project.SafeZip.extract(in, tmp, new com.zishu.ide.core.project.SafeZip.Limits());
                 } finally {

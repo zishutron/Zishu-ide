@@ -257,4 +257,55 @@ public class FileManagerTest {
         assertEquals("A.txt", l.get(1).name);
         assertEquals(3, l.size());
     }
+
+    @Test
+    public void importStreamKeepsExistingFilesAndRenamesTheNewOne() throws Exception {
+        byte[] data = new byte[200000];
+        java.util.Arrays.fill(data, (byte) 7);
+        assertEquals("pic.png", fm.importStream("", "pic.png", new ByteArrayInputStream(data), 1000000));
+        assertEquals("pic (1).png", fm.importStream("", "pic.png", new ByteArrayInputStream(data), 1000000));
+        assertEquals(200000, new File(root, "pic (1).png").length());
+        assertEquals("a_b.mp3", fm.importStream("", "a:b.mp3", new ByteArrayInputStream(new byte[3]), 10));
+        try {
+            fm.importStream("", "big.mp4", new ByteArrayInputStream(data), 1000);
+            fail("too large");
+        } catch (IOException expected) {
+            assertFalse(new File(root, "big.mp4").exists());
+            String[] left = root.list();
+            for (String n : left) {
+                assertFalse(n, n.endsWith(".tmp"));
+            }
+        }
+    }
+
+    @Test
+    public void mergeDirectoryKeepsPathsAndRenamesClashes() throws Exception {
+        fm.createDirectory("", "res");
+        IoUtil.writeUtf8Atomic(new File(root, "res/a.txt"), "mine");
+        File src = tmp.newFolder("zip");
+        IoUtil.writeUtf8Atomic(new File(src, "res/a.txt"), "theirs");
+        IoUtil.writeUtf8Atomic(new File(src, "res/b.txt"), "new");
+        IoUtil.writeUtf8Atomic(new File(src, "deep/er/c.txt"), "c");
+        FileManager.MergeResult r = fm.mergeDirectory(src, "");
+        assertEquals(3, r.added);
+        assertEquals(1, r.renamed);
+        assertEquals("mine", IoUtil.readUtf8(new File(root, "res/a.txt"), 100));
+        assertEquals("theirs", IoUtil.readUtf8(new File(root, "res/a (1).txt"), 100));
+        assertTrue(new File(root, "res/b.txt").isFile());
+        assertTrue(new File(root, "deep/er/c.txt").isFile());
+        assertFalse(src.exists() && new File(src, "deep/er/c.txt").exists());
+    }
+
+    @Test
+    public void searchFindsFilesAndFoldersByPartOfTheNameAnyCase() throws Exception {
+        fm.createDirectory("", "Notes");
+        fm.createFile("Notes", "Main.java");
+        fm.createFile("", "notes.txt");
+        List<FileManager.FileNode> r = fm.search("NOTES", 10);
+        assertEquals(2, r.size());
+        assertEquals(1, fm.search("main", 10).size());
+        assertEquals("Notes/Main.java", fm.search("main", 10).get(0).path);
+        assertEquals(0, fm.search("   ", 10).size());
+        assertEquals(1, fm.search("notes", 1).size());
+    }
 }

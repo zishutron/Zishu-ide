@@ -370,4 +370,56 @@ public class FileManagerTest {
         assertEquals(1, s2.skipped);
         assertEquals("theirs", IoUtil.readUtf8(new File(root, "res/a.txt"), 100));
     }
+
+    @Test
+    public void zipCannotWriteThroughALinkOrIntoProjectMetadata() throws Exception {
+        File outside = tmp.newFolder("outside");
+        IoUtil.writeUtf8Atomic(new File(outside, "secret.txt"), "external-original");
+        try {
+            java.nio.file.Files.createSymbolicLink(new File(root, "link").toPath(), outside.toPath());
+        } catch (UnsupportedOperationException e) {
+            return;
+        }
+        IoUtil.writeUtf8Atomic(new File(root, ".zishu/project.properties"), "mine");
+        File src = tmp.newFolder("evil");
+        IoUtil.writeUtf8Atomic(new File(src, "link/secret.txt"), "ATTACKER-CONTENT");
+        IoUtil.writeUtf8Atomic(new File(src, ".zishu/project.properties"), "ATTACKER-CONTENT");
+        IoUtil.writeUtf8Atomic(new File(src, "ok.txt"), "ok");
+        for (FileManager.Conflict c : FileManager.Conflict.values()) {
+            fm.conflicts(src, "");
+            fm.mergeDirectory(src, "", c);
+            IoUtil.writeUtf8Atomic(new File(src, "link/secret.txt"), "ATTACKER-CONTENT");
+            IoUtil.writeUtf8Atomic(new File(src, ".zishu/project.properties"), "ATTACKER-CONTENT");
+            IoUtil.writeUtf8Atomic(new File(src, "ok.txt"), "ok");
+        }
+        assertEquals("external-original", IoUtil.readUtf8(new File(outside, "secret.txt"), 100));
+        assertEquals("mine", IoUtil.readUtf8(new File(root, ".zishu/project.properties"), 100));
+        assertEquals("ok", IoUtil.readUtf8(new File(root, "ok.txt"), 100));
+    }
+
+    @Test
+    public void failedReplaceKeepsTheOldFile() throws Exception {
+        IoUtil.writeUtf8Atomic(new File(root, "a.txt"), "old");
+        java.io.InputStream bad = new java.io.InputStream() {
+            @Override
+            public int read() throws IOException {
+                throw new IOException("boom");
+            }
+        };
+        try {
+            fm.importStream("", "a.txt", bad, 100, FileManager.Conflict.REPLACE);
+            fail();
+        } catch (IOException expected) {
+            assertEquals("old", IoUtil.readUtf8(new File(root, "a.txt"), 100));
+        }
+        try {
+            fm.importStream("", ".zishu", new ByteArrayInputStream(new byte[1]), 100);
+        } catch (IOException ignored) {
+            // fine either way
+        }
+        assertFalse(new File(root, ".zishu").isFile());
+        for (String n : root.list()) {
+            assertFalse(n, n.endsWith(".tmp"));
+        }
+    }
 }

@@ -546,33 +546,28 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
     }
 
     private void showNodeMenu(View anchor, final FileManager.FileNode n) {
-        PopupMenu m = new PopupMenu(this, anchor);
+        final List<String> labels = new ArrayList<String>();
         if (n.directory) {
-            m.getMenu().add(0, 1, 0, "New file here");
-            m.getMenu().add(0, 2, 1, "New folder here");
+            labels.add("New file here");
+            labels.add("New folder here");
         }
-        m.getMenu().add(0, 3, 2, "Rename");
-        m.getMenu().add(0, 4, 3, "Delete");
-        m.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+        labels.add("Rename");
+        labels.add("Delete");
+        showMenu(anchor, false, labels.toArray(new String[0]), new MenuPick() {
             @Override
-            public boolean onMenuItemClick(android.view.MenuItem item) {
-                switch (item.getItemId()) {
-                    case 1:
-                        promptCreate(n.path, false);
-                        break;
-                    case 2:
-                        promptCreate(n.path, true);
-                        break;
-                    case 3:
-                        promptRename(n);
-                        break;
-                    default:
-                        confirmDelete(n);
+            public void pick(int index) {
+                String l = labels.get(index);
+                if (l.equals("New file here")) {
+                    promptCreate(n.path, false);
+                } else if (l.equals("New folder here")) {
+                    promptCreate(n.path, true);
+                } else if (l.equals("Rename")) {
+                    promptRename(n);
+                } else {
+                    confirmDelete(n);
                 }
-                return true;
             }
         });
-        m.show();
     }
 
     // ------------------------------------------------------------------ add menu, import, search
@@ -581,31 +576,65 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
     private String importDir = "";
 
     private void showAddMenu(View anchor) {
-        PopupMenu m = new PopupMenu(this, anchor);
-        m.getMenu().add(0, 1, 0, "Add file");
-        m.getMenu().add(0, 2, 1, "Add folder");
-        m.getMenu().add(0, 3, 2, "Import file");
-        m.getMenu().add(0, 4, 3, "Create new project");
-        m.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+        showMenu(anchor, true, new String[]{"Add file", "Add folder", "Import file", "Create new project"}, new MenuPick() {
             @Override
-            public boolean onMenuItemClick(android.view.MenuItem item) {
-                switch (item.getItemId()) {
-                    case 1:
+            public void pick(int index) {
+                switch (index) {
+                    case 0:
                         promptCreate(selectedDir, false);
                         break;
-                    case 2:
+                    case 1:
                         promptCreate(selectedDir, true);
                         break;
-                    case 3:
+                    case 2:
                         startImport();
                         break;
                     default:
                         startActivity(new Intent(EditorActivity.this, NewProjectActivity.class));
                 }
-                return true;
             }
         });
-        m.show();
+    }
+
+    private interface MenuPick {
+        void pick(int index);
+    }
+
+    /** A menu with rounded corners. Centered in the Files panel (the + menu) or right-aligned under its button (row menus). */
+    private void showMenu(View anchor, boolean centered, String[] labels, final MenuPick listener) {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0, dp(8), 0, dp(8));
+        list.setBackground(Ui.rounded(this, pal.surface, pal.outline, 20));
+        final android.widget.PopupWindow w = new android.widget.PopupWindow(list, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        w.setOutsideTouchable(true);
+        w.setElevation(dp(8));
+        int panelW = Math.min(dp(320), (int) (getResources().getDisplayMetrics().widthPixels * 0.86f));
+        int popupW = Math.min(dp(240), panelW - dp(32));
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            TextView t = Ui.text(this, pal, labels[i], Ui.Style.BODY);
+            t.setPadding(dp(20), 0, dp(20), 0);
+            t.setGravity(Gravity.CENTER_VERTICAL);
+            t.setMinHeight(dp(48));
+            t.setBackground(Ui.ripple(pal, null));
+            t.setClickable(true);
+            t.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    w.dismiss();
+                    listener.pick(index);
+                }
+            });
+            list.addView(t, new LinearLayout.LayoutParams(popupW, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        int[] loc = new int[2];
+        anchor.getLocationOnScreen(loc);
+        int x = centered ? (panelW - popupW) / 2 : Math.max(dp(8), loc[0] + anchor.getWidth() - popupW);
+        int y = loc[1] + anchor.getHeight() - dp(4);
+        w.showAtLocation(anchor.getRootView(), Gravity.TOP | Gravity.START, x, y);
     }
 
     /** Opens the system file picker (images, video, audio, ZIP, anything); the files go into the selected folder. */
@@ -684,7 +713,7 @@ public final class EditorActivity extends BaseActivity implements CodeEditText.L
                 File tmp = new File(project.dir, ".zishu/import-" + System.nanoTime());
                 try {
                     com.zishu.ide.core.project.SafeZip.extract(in, tmp, new com.zishu.ide.core.project.SafeZip.Limits());
-                    FileManager.MergeResult r = fm.mergeDirectory(tmp, dir);
+                    FileManager.MergeResult r = fm.mergeDirectory(FileManager.unwrapSingleFolder(tmp), dir);
                     return new int[]{r.added, r.renamed};
                 } finally {
                     try {
